@@ -19,7 +19,7 @@ import {
   usuario,
   validarTokenReset,
 } from './auth.ts';
-import { emailAnexoCapivara, emailRecuperacaoHtml, enviarEmail } from './email.ts';
+import { emailRecuperacaoHtml, enviarEmail } from './email.ts';
 
 const PORT = Number(process.env.PORT ?? 4310);
 const PUBLIC_URL = process.env.PUBLIC_URL ?? `http://localhost:${PORT}`;
@@ -132,7 +132,7 @@ api.post('/auth/forgot-password', async (req, res) => {
     const token = await criarTokenReset(u.id);
     const link = `${PUBLIC_URL}/redefinir-senha?token=${token}`;
     try {
-      await enviarEmail(email, 'Redefinir senha — Capivara Política', emailRecuperacaoHtml(link), [emailAnexoCapivara()]);
+      await enviarEmail(email, 'Redefinir senha — Capivara Política', emailRecuperacaoHtml(link));
     } catch (e) {
       console.error('Falha ao enviar email de recuperação:', e);
     }

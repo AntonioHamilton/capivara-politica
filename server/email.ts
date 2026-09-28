@@ -1,18 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM_EMAIL = process.env.EMAIL_FROM ?? 'Capivara Política <onboarding@resend.dev>';
+const PUBLIC_URL = process.env.PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 4310}`;
 
-const capivaraBase64 = fs.readFileSync(path.resolve(import.meta.dirname, '..', 'public', 'capivara.png')).toString('base64');
-
-interface Anexo {
-  filename: string;
-  content: string;
-  content_id?: string;
-}
-
-export async function enviarEmail(destinatario: string, assunto: string, html: string, anexos: Anexo[] = []): Promise<void> {
+export async function enviarEmail(destinatario: string, assunto: string, html: string): Promise<void> {
   if (!RESEND_API_KEY) {
     console.warn(`[email] RESEND_API_KEY não configurada — email para ${destinatario} não foi enviado ("${assunto}")`);
     return;
@@ -20,7 +10,7 @@ export async function enviarEmail(destinatario: string, assunto: string, html: s
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM_EMAIL, to: destinatario, subject: assunto, html, attachments: anexos }),
+    body: JSON.stringify({ from: FROM_EMAIL, to: destinatario, subject: assunto, html }),
   });
   if (!r.ok) {
     const corpo = await r.text().catch(() => '');
@@ -39,7 +29,7 @@ function layoutEmail(eyebrow: string, titulo: string, corpoHtml: string): string
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; background-color: #161618; border: 1px solid #2c2c30; border-radius: 20px; overflow: hidden;">
             <tr>
               <td style="background-color: #1f1f22; padding: 36px 32px 8px; text-align: center;">
-                <img src="cid:capivara" width="120" height="120" alt="Capivara Política" style="display: block; margin: 0 auto 12px; border-radius: 50%; border: 3px solid #ffc800;" />
+                <img src="${PUBLIC_URL}/capivara.png" width="120" height="120" alt="Capivara Política" style="display: block; margin: 0 auto 12px; border-radius: 50%; border: 3px solid #ffc800;" />
                 <h2 style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #ffc800;">Capivara Política</h2>
               </td>
             </tr>
@@ -94,8 +84,4 @@ export function emailRecuperacaoHtml(link: string): string {
     <p style="margin: 0; font-size: 13px; color: #7a7a75;">Se não foi você quem pediu, pode ignorar este email — sua senha continua a mesma.</p>
     `,
   );
-}
-
-export function emailAnexoCapivara(): Anexo {
-  return { filename: 'capivara.png', content: capivaraBase64, content_id: 'capivara' };
 }

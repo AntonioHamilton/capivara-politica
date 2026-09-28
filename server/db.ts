@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const dataDir = path.resolve(import.meta.dirname, '..', 'data');
-fs.mkdirSync(dataDir, { recursive: true });
 
 const url = process.env.TURSO_DATABASE_URL || `file:${path.join(dataDir, 'politicos.db')}`;
 const authToken = process.env.TURSO_AUTH_TOKEN || undefined;
+
+// Sem Turso configurado, usa um arquivo sqlite local (só faz sentido em dev).
+if (!process.env.TURSO_DATABASE_URL) fs.mkdirSync(dataDir, { recursive: true });
 
 export const db = createClient({ url, authToken });
 
