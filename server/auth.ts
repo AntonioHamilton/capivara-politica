@@ -52,7 +52,13 @@ export function tokenAtual(req: Request): string | null {
 export async function criarSessao(res: Response, userId: number): Promise<void> {
   const token = crypto.randomBytes(32).toString('hex');
   await run('INSERT INTO sessions (token, user_id, criado_em) VALUES (?, ?, ?)', [token, userId, new Date().toISOString()]);
-  res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: DURACAO_MS, path: '/' });
+  res.cookie(COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: DURACAO_MS,
+    path: '/',
+  });
 }
 
 export async function encerrarSessao(req: Request, res: Response): Promise<void> {

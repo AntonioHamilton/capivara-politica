@@ -2,8 +2,7 @@ import { ORDEM_EIXOS, PERGUNTAS } from './questions.ts';
 import type { Eixo } from './questions.ts';
 import type { QuizState } from './types.ts';
 
-const MIN_COMPARADAS = 10;
-const MIN_COBERTURA = 0.4;
+const MIN_COMPARADAS = 1;
 
 type RespostasAlvo = Record<string, { resposta: 'sim' | 'nao' | 'sem_info' }>;
 
@@ -49,7 +48,7 @@ export function compatibilidade(
     conflitos.push({ id: 'etica', motivo: 'Tem condenação por corrupção registrada' });
   }
 
-  const minimo = Math.max(MIN_COMPARADAS, Math.ceil(MIN_COBERTURA * respondidas));
+  const minimo = MIN_COMPARADAS;
   return {
     pct: comparadas >= minimo ? Math.round((100 * pesoOk) / pesoTotalUsuario) : null,
     comparadas,

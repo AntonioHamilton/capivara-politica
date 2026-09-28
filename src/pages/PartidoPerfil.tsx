@@ -65,7 +65,7 @@ export function PartidoPerfil() {
           <h1>{party.sigla}</h1>
           <div className="perfil-linha">
             <span>{party.nome}</span>
-            {d?.ideologia_declarada && <span className="selo">{d.ideologia_declarada}</span>}
+            {d?.ideologia_declarada && <span className="selo envolve">{d.ideologia_declarada}</span>}
           </div>
           {pesquisa && <div className="perfil-linha muted">Pesquisado em {dataBR(pesquisa.criadoEm)}</div>}
           {d?.resumo && (
@@ -98,7 +98,7 @@ export function PartidoPerfil() {
             </>
           ) : (
             <>
-              <span className="selo-neutro">{pesquisa ? 'Dados insuficientes para comparar' : 'Não pesquisado'}</span>
+              <span className="selo-neutro envolve">{pesquisa ? 'Dados insuficientes para comparar' : 'Não pesquisado'}</span>
               {compat && (
                 <span className="muted pequeno-texto">
                   {compat.comparadas} respostas em comum, o mínimo é {compat.minimo}

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from './api.ts';
 import type { Data, Pesquisa, QuizState } from './types.ts';
@@ -11,25 +11,22 @@ interface Store {
 
 const Ctx = createContext<Store | null>(null);
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<Data | null>(null);
+// os dados já chegam prontos de AuthGate (que faz a única chamada de carregamento inicial,
+// junto com a autenticação) — este provider só gerencia o estado local depois disso.
+export function StoreProvider({ dataInicial, children }: { dataInicial: Data; children: ReactNode }) {
+  const [data, setData] = useState<Data>(dataInicial);
   const [erro, setErro] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setData(await api.data());
   }, []);
 
-  useEffect(() => {
-    refresh().catch((e: Error) => setErro(e.message));
-  }, [refresh]);
-
   const saveQuiz = useCallback((q: QuizState) => {
-    setData((d) => (d ? { ...d, quiz: q } : d));
+    setData((d) => ({ ...d, quiz: q }));
     api.saveQuiz(q).catch((e: Error) => setErro(e.message));
   }, []);
 
-  if (erro) return <p className="estado-tela">Não foi possível carregar os dados: {erro}</p>;
-  if (!data) return <p className="estado-tela">Carregando...</p>;
+  if (erro) return <p className="estado-tela">Não foi possível salvar: {erro}</p>;
   return <Ctx.Provider value={{ data, refresh, saveQuiz }}>{children}</Ctx.Provider>;
 }
 

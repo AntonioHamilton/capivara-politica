@@ -147,7 +147,7 @@ export function Perfil() {
             </>
           ) : (
             <>
-              <span className="selo-neutro">{pesquisa ? 'Dados insuficientes para comparar' : 'Sem compatibilidade'}</span>
+              <span className="selo-neutro envolve">{pesquisa ? 'Dados insuficientes para comparar' : 'Sem compatibilidade'}</span>
               {compat && (
                 <span className="muted pequeno-texto">
                   {compat.comparadas} respostas em comum, o mínimo é {compat.minimo}

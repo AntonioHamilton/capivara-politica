@@ -55,7 +55,7 @@ export function Landing() {
           <div className="landing-blob landing-blob-1" aria-hidden="true" />
           <div className="landing-blob landing-blob-2" aria-hidden="true" />
           <div className="landing-hero-texto">
-            <span className="landing-selo">Eleições 2026 · Sergipe</span>
+            <span className="landing-selo">Eleições 2026 · Brasil</span>
             <h1>
               Entenda seu perfil político.
               <br />

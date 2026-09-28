@@ -88,6 +88,72 @@ export function PartyBadge({ party, uf }: { party: Party | undefined; uf?: strin
   );
 }
 
+const LOADING_LARGURA_PISTA = 140;
+const LOADING_LARGURA_CAPIVARA = 44;
+
+// a barra não tem como saber o progresso real de uma única chamada de API (não há etapas
+// para medir) — então ela avança de forma otimista e desacelera perto de 90%, e só quando
+// `pronto` chega vai correndo até 100% antes de liberar a próxima tela, pra nunca "travar"
+// nem cortar no meio.
+export function Loading({ texto = 'Carregando...', pronto = false, onCompleto }: { texto?: string; pronto?: boolean; onCompleto?: () => void }) {
+  const [pct, setPct] = useState(0);
+  const semAnimacao = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    if (semAnimacao) {
+      if (pronto) {
+        setPct(100);
+        onCompleto?.();
+      } else {
+        setPct(90);
+      }
+      return;
+    }
+
+    let frame: number;
+    let ultimo = performance.now();
+
+    const tick = (agora: number) => {
+      const dt = Math.min(agora - ultimo, 250);
+      ultimo = agora;
+      setPct((p) => {
+        if (pronto) {
+          if (p >= 100) {
+            onCompleto?.();
+            return 100;
+          }
+          return Math.min(p + dt * 0.4, 100);
+        }
+        const restante = 90 - p;
+        if (restante <= 0.1) return p;
+        return p + restante * 0.0018 * dt;
+      });
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [pronto, onCompleto, semAnimacao]);
+
+  const alcance = LOADING_LARGURA_PISTA - LOADING_LARGURA_CAPIVARA;
+
+  return (
+    <div className="loading-tela">
+      <div className="loading-pista" style={{ width: LOADING_LARGURA_PISTA }}>
+        <img
+          className="loading-capivara"
+          style={{ left: (pct / 100) * alcance, width: LOADING_LARGURA_CAPIVARA }}
+          src="/capivara.png"
+          alt=""
+        />
+      </div>
+      <div className="loading-barra-trilha" style={{ width: LOADING_LARGURA_PISTA }}>
+        <div className="loading-barra-preenchimento" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="muted">{texto}</p>
+    </div>
+  );
+}
+
 export function Modal({ titulo, onClose, children, largo }: { titulo: string; onClose: () => void; children: ReactNode; largo?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -155,54 +221,18 @@ export function ImagePicker({
   nome: string;
   rotulo: string;
 }) {
-  const [erro, setErro] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
-
-  const enviar = (file: File) => {
-    setErro(null);
-    setEnviando(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const { url } = await api.upload(String(reader.result));
-        onChange(url);
-      } catch (e) {
-        setErro((e as Error).message);
-      } finally {
-        setEnviando(false);
-      }
-    };
-    reader.onerror = () => {
-      setErro('Não consegui ler o arquivo');
-      setEnviando(false);
-    };
-    reader.readAsDataURL(file);
-  };
-
   return (
     <div className="campo">
       <label>{rotulo}</label>
       <div className="image-picker">
         <Avatar src={value} nome={nome || '?'} size={64} />
         <div className="image-picker-campos">
-          <input
-            type="url"
-            placeholder="Cole o link da imagem"
-            value={value && !value.startsWith('/uploads/') ? value : ''}
-            onChange={(e) => onChange(e.target.value.trim() || null)}
-          />
-          <div className="linha">
-            <label className="btn secundario pequeno">
-              {enviando ? 'Enviando...' : 'Enviar arquivo'}
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => e.target.files?.[0] && enviar(e.target.files[0])} />
-            </label>
-            {value && (
-              <button type="button" className="btn texto pequeno" onClick={() => onChange(null)}>
-                Remover
-              </button>
-            )}
-          </div>
-          {erro && <p className="erro">{erro}</p>}
+          <input type="url" placeholder="Cole o link da imagem" value={value ?? ''} onChange={(e) => onChange(e.target.value.trim() || null)} />
+          {value && (
+            <button type="button" className="btn texto pequeno" onClick={() => onChange(null)}>
+              Remover
+            </button>
+          )}
         </div>
       </div>
     </div>

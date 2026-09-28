@@ -1432,6 +1432,15 @@ textarea:focus {
   text-transform: uppercase;
 }
 
+/* variante para textos livres mais longos (ex.: ideologia declarada), que não devem
+   forçar a largura da tela como os selos curtos de uma palavra só */
+.selo.envolve,
+.selo-neutro.envolve {
+  white-space: normal;
+  max-width: 100%;
+  text-align: left;
+}
+
 /* menu do usuário */
 .user-menu {
   position: relative;
@@ -1455,6 +1464,7 @@ textarea:focus {
 }
 
 .user-menu-nome {
+  display: inline-block;
   font-size: 0.88rem;
   font-weight: 500;
   white-space: nowrap;
@@ -1592,6 +1602,18 @@ textarea:focus {
 }
 
 /* colinha */
+.colinha-uf-campo {
+  max-width: 260px;
+  margin-bottom: 0.5rem;
+}
+
+.colinha-uf-campo label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
 .colinha-folha {
   display: flex;
   flex-direction: column;
@@ -1632,12 +1654,15 @@ textarea:focus {
   padding: 0.15rem 0.65rem;
 }
 
-.colinha-busca {
-  position: relative;
+.colinha-campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
   margin-bottom: 0.85rem;
 }
 
-.colinha-busca input {
+.colinha-campos select,
+.colinha-campos input {
   font: inherit;
   color: var(--text);
   background-color: var(--surface);
@@ -1647,37 +1672,48 @@ textarea:focus {
   width: 100%;
 }
 
-.colinha-sugestoes {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 0.3rem);
-  left: 0;
-  right: 0;
-  max-height: 240px;
-  overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  list-style: none;
-  margin: 0;
-  padding: 0.35rem;
+@media (max-width: 640px) {
+  .colinha-campos {
+    grid-template-columns: 1fr;
+  }
 }
 
-.colinha-sugestoes li button {
+.colinha-numero-campo {
+  margin-bottom: 0.85rem;
+}
+
+.colinha-numero-label {
   display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.5rem 0.6rem;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
 }
 
-.colinha-sugestoes li button:hover {
-  background: var(--surface-2);
+.colinha-numero-otp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.colinha-numero-otp input {
+  flex: 0 0 2.6rem;
+  width: 2.6rem;
+  height: 3.1rem;
+  padding: 0;
+  text-align: center;
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  background-color: var(--surface);
+  color: var(--accent-text);
+}
+
+.colinha-numero-otp input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .colinha-cargo-corpo {
@@ -1845,6 +1881,11 @@ textarea:focus {
   margin-top: 0.5rem;
 }
 
+.landing-cta .btn.secundario {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border-color: color-mix(in srgb, var(--text) 30%, transparent);
+}
+
 .landing-hero-img {
   position: relative;
   z-index: 1;
@@ -1968,6 +2009,65 @@ textarea:focus {
   .landing-header-acoes .btn.texto {
     display: none;
   }
+  .landing-cta {
+    justify-content: center;
+  }
+  .landing-selo {
+    align-self: center;
+  }
+  .landing-cta .btn.secundario {
+    background: var(--surface-2);
+  }
+}
+
+/* tela de carregamento */
+.loading-tela {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  background: var(--bg);
+}
+
+.loading-pista {
+  position: relative;
+  width: 140px;
+  height: 56px;
+}
+
+.loading-capivara {
+  position: absolute;
+  bottom: 0;
+  height: auto;
+  animation: loading-passo 0.35s ease-in-out infinite;
+}
+
+@keyframes loading-passo {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(3deg);
+  }
+}
+
+.loading-barra-trilha {
+  width: 140px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.loading-barra-preenchimento {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1979,5 +2079,8 @@ textarea:focus {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+  .loading-capivara {
+    animation: none;
   }
 }

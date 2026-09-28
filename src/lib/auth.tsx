@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Loading } from '../components/ui.tsx';
+import { api } from './api.ts';
+import { StoreProvider } from './store.tsx';
+import type { Data } from './types.ts';
 
 export interface User {
   id: number;
@@ -35,26 +39,49 @@ export const mudarSenha = (senhaAtual: string, novaSenha: string) => enviar<{ ok
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [data, setData] = useState<Data | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [mostrarLoading, setMostrarLoading] = useState(true);
+
+  const entrar = (u: User | null) => {
+    setUser(u);
+    if (!u) return;
+    setMostrarLoading(true);
+    api
+      .data()
+      .then(setData)
+      .catch((e: Error) => setErro(e.message));
+  };
 
   useEffect(() => {
     let ativo = true;
     fetch('/api/auth/me')
       .then((r) => (r.ok ? r.json() : null))
-      .then((u) => ativo && setUser(u))
-      .catch(() => ativo && setUser(null));
+      .catch(() => null)
+      .then((u: User | null) => ativo && entrar(u));
     return () => {
       ativo = false;
     };
   }, []);
 
-  if (user === undefined) return <p className="estado-tela">Carregando...</p>;
-  if (!user) return <LoginPage onEntrar={setUser} />;
+  const pronto = user !== undefined && (!user || data != null || erro != null);
+
+  if (erro) return <p className="estado-tela">Não foi possível carregar os dados: {erro}</p>;
+  if (mostrarLoading) return <Loading pronto={pronto} onCompleto={() => setMostrarLoading(false)} />;
+  if (!user) return <LoginPage onEntrar={entrar} />;
 
   const logout = () => {
-    fetch('/api/auth/logout', { method: 'POST' }).finally(() => setUser(null));
+    fetch('/api/auth/logout', { method: 'POST' }).finally(() => {
+      setUser(null);
+      setData(null);
+    });
   };
 
-  return <Ctx.Provider value={{ user, logout }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ user, logout }}>
+      <StoreProvider dataInicial={data!}>{children}</StoreProvider>
+    </Ctx.Provider>
+  );
 }
 
 function LoginPage({ onEntrar }: { onEntrar: (u: User) => void }) {

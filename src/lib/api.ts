@@ -49,9 +49,23 @@ export interface FeedbackInfo {
   email: string | null;
 }
 
+export interface ColinhaItemPublico {
+  cargo: Cargo;
+  uf: string;
+  vaga: number | null;
+  nome: string;
+  numero: string | null;
+  foto: string | null;
+  partido: string | null;
+}
+
+export interface ColinhaPublica {
+  itens: ColinhaItemPublico[];
+  atualizadoEm: string;
+}
+
 export const api = {
   data: () => req<Data>('/api/data'),
-  upload: (dataUrl: string) => req<{ url: string }>('/api/upload', 'POST', { dataUrl }),
   addParty: (p: PartidoInput) => req<{ id: number }>('/api/parties', 'POST', p),
   updateParty: (id: number, p: PartidoInput) => req('/api/parties/' + id, 'PUT', p),
   deleteParty: (id: number) => req('/api/parties/' + id, 'DELETE'),
@@ -69,4 +83,6 @@ export const api = {
   promoteUser: (id: number) => req('/api/admin/users/' + id + '/promote', 'POST'),
   sendFeedback: (mensagem: string) => req('/api/feedback', 'POST', { mensagem }),
   listFeedback: () => req<FeedbackInfo[]>('/api/feedback'),
+  saveColinha: (itens: ColinhaItemPublico[]) => req<{ token: string }>('/api/colinha', 'PUT', { itens }),
+  colinhaPublica: (token: string) => req<ColinhaPublica>('/api/colinha/' + token),
 };

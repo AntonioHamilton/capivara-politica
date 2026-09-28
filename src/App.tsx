@@ -3,8 +3,9 @@ import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom';
 import { Avatar, Icon } from './components/ui.tsx';
 import { AuthGate, useAuth } from './lib/auth.tsx';
 import { quizCompleto } from './lib/scoring.ts';
-import { StoreProvider, useStore } from './lib/store.tsx';
+import { useStore } from './lib/store.tsx';
 import { Colinha } from './pages/Colinha.tsx';
+import { ColinhaPublica } from './pages/ColinhaPublica.tsx';
 import { Conta } from './pages/Conta.tsx';
 import { Dados } from './pages/Dados.tsx';
 import { EsqueciSenha } from './pages/EsqueciSenha.tsx';
@@ -139,7 +140,7 @@ function Conteudo() {
   const [menuAberto, setMenuAberto] = useState(false);
   const { user } = useAuth();
   return (
-    <StoreProvider>
+    <>
       <Topo menuAberto={menuAberto} setMenuAberto={setMenuAberto} />
       <main>
         <Routes>
@@ -158,7 +159,7 @@ function Conteudo() {
           <Route path="*" element={<p className="estado-tela">Página não encontrada.</p>} />
         </Routes>
       </main>
-    </StoreProvider>
+    </>
   );
 }
 
@@ -169,6 +170,7 @@ export function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/esqueci-senha" element={<EsqueciSenha />} />
         <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+        <Route path="/colinha/:token" element={<ColinhaPublica />} />
         <Route
           path="/app/*"
           element={

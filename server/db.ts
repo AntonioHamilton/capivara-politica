@@ -3,8 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const dataDir = path.resolve(import.meta.dirname, '..', 'data');
-export const uploadsDir = path.join(dataDir, 'uploads');
-fs.mkdirSync(uploadsDir, { recursive: true });
+fs.mkdirSync(dataDir, { recursive: true });
 
 const url = process.env.TURSO_DATABASE_URL || `file:${path.join(dataDir, 'politicos.db')}`;
 const authToken = process.env.TURSO_AUTH_TOKEN || undefined;
@@ -108,6 +107,13 @@ await db.executeMultiple(`
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     mensagem TEXT NOT NULL,
     criado_em TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS colinhas (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    itens TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
   );
 `);
 

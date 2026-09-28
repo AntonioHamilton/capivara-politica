@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toPng } from 'html-to-image';
 import { Avatar, PartyBadge } from '../components/ui.tsx';
-import { chaveGrupo, useItens } from '../lib/ranking.ts';
+import { api } from '../lib/api.ts';
+import type { ColinhaItemPublico } from '../lib/api.ts';
+import { useItens } from '../lib/ranking.ts';
 import type { Item } from '../lib/ranking.ts';
 import { quizCompleto } from '../lib/scoring.ts';
 import { useStore } from '../lib/store.tsx';
-import { CARGOS, ufLabel } from '../lib/types.ts';
+import { CARGOS, UFS, ufLabel } from '../lib/types.ts';
 import type { Cargo } from '../lib/types.ts';
 
 const ORDEM_CARGOS: Cargo[] = ['presidente', 'governador', 'senador', 'deputado_federal', 'deputado_estadual'];
@@ -19,6 +21,17 @@ const DIGITOS_CARGO: Record<Cargo, number> = {
   deputado_estadual: 5,
 };
 
+// o Senado renova por 2 vagas na maioria das eleições — os demais cargos têm 1 vaga só
+const SLOTS_CARGO: Record<Cargo, number> = {
+  presidente: 1,
+  governador: 1,
+  senador: 2,
+  deputado_federal: 1,
+  deputado_estadual: 1,
+};
+
+const UFS_ORDENADAS = Object.entries(UFS).sort((a, b) => a[1].localeCompare(b[1]));
+
 // usado no lugar de fotos externas (bloqueadas por CORS) ao gerar a imagem da colinha
 const PLACEHOLDER_FOTO =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='32' fill='%232c2c30'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%239b9b94'/%3E%3Cpath d='M12 56c2-14 12-20 20-20s18 6 20 20' fill='%239b9b94'/%3E%3C/svg%3E";
@@ -27,120 +40,79 @@ interface Grupo {
   chave: string;
   cargo: Cargo;
   uf: string;
+  slot: number | null;
   itens: Item[];
 }
 
-type Escolha = { tipo: 'candidato'; id: number } | { tipo: 'manual'; nome: string; numero: string };
+interface Escolha {
+  candidatoId: number | null;
+  nomeManual: string;
+  numero: string;
+}
 
 function rotulo(item: Item): string {
   const numero = item.pesquisa?.dados.basico.numero_urna;
   return numero ? `${item.cand.nome} · ${numero}` : item.cand.nome;
 }
 
-function NumeroUrna({ numero }: { numero: string | null | undefined }) {
-  if (!numero) return <span className="colinha-sem-numero muted">Número não informado</span>;
-  return (
-    <div className="colinha-numero">
-      {numero.split('').map((d, i) => (
-        <span key={i}>{d}</span>
-      ))}
-    </div>
-  );
+function nomeCargo(grupo: Grupo): string {
+  if (!grupo.slot) return CARGOS[grupo.cargo];
+  return `${grupo.slot}º ${CARGOS[grupo.cargo]}`;
 }
 
-function BuscaCandidato({
-  grupo,
-  valorAtual,
-  onEscolher,
+function estadoInicial(grupo: Grupo): Escolha {
+  const idx = (grupo.slot ?? 1) - 1;
+  const padrao = grupo.itens[idx] as Item | undefined;
+  return {
+    candidatoId: padrao?.cand.id ?? null,
+    nomeManual: '',
+    numero: padrao?.pesquisa?.dados.basico.numero_urna ?? '',
+  };
+}
+
+function InputNumeroUrna({
+  digitos,
+  valor,
+  onChange,
+  label,
 }: {
-  grupo: Grupo;
-  valorAtual: string;
-  onEscolher: (escolha: Escolha | null) => void;
+  digitos: number;
+  valor: string;
+  onChange: (v: string) => void;
+  label: string;
 }) {
-  const [texto, setTexto] = useState(valorAtual);
-  const [editando, setEditando] = useState(false);
-  const [aberto, setAberto] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
 
-  useEffect(() => {
-    setTexto(valorAtual);
-    setEditando(false);
-  }, [valorAtual]);
+  const setDigito = (i: number, bruto: string) => {
+    const d = bruto.replace(/\D/g, '').slice(-1);
+    const arr = valor.padEnd(digitos, ' ').split('');
+    arr[i] = d || ' ';
+    onChange(arr.join('').trimEnd());
+    if (d && i < digitos - 1) refs.current[i + 1]?.focus();
+  };
 
-  useEffect(() => {
-    if (!aberto) return;
-    const fechar = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAberto(false);
-    };
-    window.addEventListener('mousedown', fechar);
-    return () => window.removeEventListener('mousedown', fechar);
-  }, [aberto]);
-
-  const q = editando ? texto.trim().toLowerCase() : '';
-  const sugestoes = q
-    ? grupo.itens.filter((i) => {
-        const numero = i.pesquisa?.dados.basico.numero_urna ?? '';
-        return i.cand.nome.toLowerCase().includes(q) || numero.includes(q);
-      })
-    : grupo.itens;
-
-  const confirmar = () => {
-    setAberto(false);
-    if (!editando) return;
-    const digitado = texto.trim();
-    if (!digitado) {
-      onEscolher(null);
-      return;
-    }
-    const exato = grupo.itens.find(
-      (i) => i.cand.nome.toLowerCase() === digitado.toLowerCase() || i.pesquisa?.dados.basico.numero_urna === digitado,
-    );
-    if (exato) {
-      onEscolher({ tipo: 'candidato', id: exato.cand.id });
-      return;
-    }
-    if (/^\d+$/.test(digitado)) {
-      onEscolher({ tipo: 'manual', nome: '', numero: digitado });
-    } else {
-      onEscolher({ tipo: 'manual', nome: digitado, numero: '' });
-    }
+  const onKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !valor[i] && i > 0) refs.current[i - 1]?.focus();
   };
 
   return (
-    <div className="colinha-busca" ref={wrapRef}>
-      <input
-        value={texto}
-        onChange={(e) => {
-          setTexto(e.target.value);
-          setEditando(true);
-          setAberto(true);
-        }}
-        onFocus={() => setAberto(true)}
-        onBlur={confirmar}
-        onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
-        placeholder="Buscar por nome ou número"
-        aria-label={`Escolher ${CARGOS[grupo.cargo]}`}
-      />
-      {aberto && sugestoes.length > 0 && (
-        <ul className="colinha-sugestoes" role="listbox">
-          {sugestoes.map((i) => (
-            <li key={i.cand.id}>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onEscolher({ tipo: 'candidato', id: i.cand.id });
-                  setTexto(rotulo(i));
-                  setEditando(false);
-                  setAberto(false);
-                }}
-              >
-                {rotulo(i)}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="colinha-numero-otp">
+      {Array.from({ length: digitos }, (_, i) => (
+        <input
+          key={i}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={valor[i] ?? ''}
+          onChange={(e) => setDigito(i, e.target.value)}
+          onKeyDown={(e) => onKeyDown(i, e)}
+          onFocus={(e) => e.target.select()}
+          aria-label={`Dígito ${i + 1} do número da urna para ${label}`}
+        />
+      ))}
     </div>
   );
 }
@@ -148,43 +120,88 @@ function BuscaCandidato({
 function CartaoCargo({
   grupo,
   escolha,
-  onEscolher,
+  onMudar,
 }: {
   grupo: Grupo;
-  escolha: Escolha | undefined;
-  onEscolher: (escolha: Escolha | null) => void;
+  escolha: Escolha;
+  onMudar: (escolha: Escolha) => void;
 }) {
-  const padrao = grupo.itens[0] as Item | undefined;
-  const item = escolha?.tipo === 'candidato' ? (grupo.itens.find((i) => i.cand.id === escolha.id) ?? padrao) : escolha ? undefined : padrao;
-  const manual = escolha?.tipo === 'manual' ? escolha : null;
+  const item = escolha.candidatoId != null ? grupo.itens.find((i) => i.cand.id === escolha.candidatoId) : undefined;
+  const digitos = DIGITOS_CARGO[grupo.cargo];
 
-  const valorAtual = manual ? manual.nome || manual.numero : item ? rotulo(item) : '';
+  const selecionarCandidato = (valor: string) => {
+    if (!valor) {
+      onMudar({ ...escolha, candidatoId: null });
+      return;
+    }
+    const escolhido = grupo.itens.find((i) => i.cand.id === Number(valor));
+    onMudar({
+      candidatoId: Number(valor),
+      nomeManual: '',
+      numero: escolhido?.pesquisa?.dados.basico.numero_urna ?? '',
+    });
+  };
+
+  const mudarNomeManual = (nomeManual: string) => {
+    const achado = grupo.itens.find((i) => i.cand.nome.trim().toLowerCase() === nomeManual.trim().toLowerCase());
+    if (achado) {
+      onMudar({ candidatoId: achado.cand.id, nomeManual: '', numero: achado.pesquisa?.dados.basico.numero_urna ?? '' });
+      return;
+    }
+    onMudar({ ...escolha, candidatoId: null, nomeManual });
+  };
+
+  const mudarNumero = (numero: string) => {
+    const achado = grupo.itens.find((i) => i.pesquisa?.dados.basico.numero_urna === numero);
+    if (achado) {
+      onMudar({ candidatoId: achado.cand.id, nomeManual: '', numero });
+      return;
+    }
+    onMudar({ ...escolha, numero });
+  };
 
   return (
     <div className="card colinha-cargo">
       <div className="colinha-cargo-cab">
         <span className="colinha-cargo-nome">
-          {CARGOS[grupo.cargo]}
+          {nomeCargo(grupo)}
           {grupo.uf !== 'BR' && ` · ${ufLabel(grupo.uf)}`}
         </span>
-        <span className="colinha-digitos-tag">{DIGITOS_CARGO[grupo.cargo]} dígitos</span>
+        <span className="colinha-digitos-tag">{digitos} dígitos</span>
       </div>
 
-      <BuscaCandidato grupo={grupo} valorAtual={valorAtual} onEscolher={onEscolher} />
+      <div className="colinha-campos">
+        <select
+          className="colinha-select"
+          value={escolha.candidatoId != null ? String(escolha.candidatoId) : ''}
+          onChange={(e) => selecionarCandidato(e.target.value)}
+          aria-label={`Escolher ${nomeCargo(grupo)} na lista`}
+        >
+          <option value="">Fora da base — digitar nome</option>
+          {grupo.itens.map((i) => (
+            <option key={i.cand.id} value={i.cand.id}>
+              {rotulo(i)}
+            </option>
+          ))}
+        </select>
+        <input
+          className="colinha-busca-nome"
+          type="text"
+          value={escolha.candidatoId == null ? escolha.nomeManual : ''}
+          onChange={(e) => mudarNomeManual(e.target.value)}
+          placeholder="Ou digite o nome de quem não está na lista"
+          aria-label={`Nome manual para ${nomeCargo(grupo)}`}
+        />
+      </div>
+
+      <div className="colinha-numero-campo">
+        <span className="colinha-numero-label">Número da urna</span>
+        <InputNumeroUrna digitos={digitos} valor={escolha.numero} onChange={mudarNumero} label={nomeCargo(grupo)} />
+      </div>
 
       <div className="colinha-cargo-corpo">
-        {manual ? (
+        {item ? (
           <>
-            <NumeroUrna numero={manual.numero || null} />
-            <Avatar src={null} nome={manual.nome || '?'} size={64} />
-            <div className="colinha-cargo-info">
-              <strong>{manual.nome || 'Nome não informado'}</strong>
-              <span className="selo-neutro">Fora da base — escolha manual</span>
-            </div>
-          </>
-        ) : item ? (
-          <>
-            <NumeroUrna numero={item.pesquisa?.dados.basico.numero_urna} />
             <Avatar src={item.cand.foto} nome={item.cand.nome} size={64} />
             <div className="colinha-cargo-info">
               <strong>{item.cand.nome}</strong>
@@ -196,8 +213,16 @@ function CartaoCargo({
               )}
             </div>
           </>
+        ) : escolha.nomeManual ? (
+          <>
+            <Avatar src={null} nome={escolha.nomeManual} size={64} />
+            <div className="colinha-cargo-info">
+              <strong>{escolha.nomeManual}</strong>
+              <span className="selo-neutro">Fora da base — escolha manual</span>
+            </div>
+          </>
         ) : (
-          <p className="muted pequeno-texto">Nenhum candidato cadastrado nesse cargo. Busque pelo nome ou digite o número.</p>
+          <p className="muted pequeno-texto">Nenhum candidato cadastrado nesse cargo. Escolha na lista ou digite o nome e o número.</p>
         )}
       </div>
     </div>
@@ -209,27 +234,55 @@ export function Colinha() {
   const itens = useItens();
   const [escolhas, setEscolhas] = useState<Record<string, Escolha>>({});
   const [salvando, setSalvando] = useState(false);
+  const [compartilhando, setCompartilhando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  const grupos = useMemo(() => {
-    const mapa = new Map<string, Grupo>();
+  // usa a UF mais comum entre os candidatos já cadastrados como sugestão inicial
+  const ufPadrao = useMemo(() => {
+    const contagem = new Map<string, number>();
     for (const it of itens) {
-      const chave = chaveGrupo(it.cand);
-      if (!mapa.has(chave)) mapa.set(chave, { chave, cargo: it.cand.cargo, uf: it.cand.uf, itens: [] });
-      mapa.get(chave)!.itens.push(it);
+      if (it.cand.uf === 'BR') continue;
+      contagem.set(it.cand.uf, (contagem.get(it.cand.uf) ?? 0) + 1);
     }
-    for (const g of mapa.values()) {
-      g.itens.sort((a, b) => {
+    return [...contagem.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'SE';
+  }, [itens]);
+  const [ufEscolhida, setUfEscolhida] = useState<string | null>(null);
+  const uf = ufEscolhida ?? ufPadrao;
+
+  const grupos = useMemo(() => {
+    const porCargo = new Map<Cargo, Item[]>();
+    for (const it of itens) {
+      const ufDoCargo = it.cand.cargo === 'presidente' ? 'BR' : uf;
+      if (it.cand.uf !== ufDoCargo) continue;
+      if (!porCargo.has(it.cand.cargo)) porCargo.set(it.cand.cargo, []);
+      porCargo.get(it.cand.cargo)!.push(it);
+    }
+    for (const lista of porCargo.values()) {
+      lista.sort((a, b) => {
         const pa = a.compat?.pct ?? -1;
         const pb = b.compat?.pct ?? -1;
         return pb - pa || a.cand.nome.localeCompare(b.cand.nome);
       });
     }
-    return [...mapa.values()].sort(
-      (a, b) => ORDEM_CARGOS.indexOf(a.cargo) - ORDEM_CARGOS.indexOf(b.cargo) || a.uf.localeCompare(b.uf),
-    );
-  }, [itens]);
+
+    const out: Grupo[] = [];
+    for (const cargo of ORDEM_CARGOS) {
+      const ufDoCargo = cargo === 'presidente' ? 'BR' : uf;
+      const itensCargo = porCargo.get(cargo) ?? [];
+      const slots = SLOTS_CARGO[cargo];
+      for (let slot = 1; slot <= slots; slot++) {
+        out.push({
+          chave: slots > 1 ? `${cargo}:${ufDoCargo}:${slot}` : `${cargo}:${ufDoCargo}`,
+          cargo,
+          uf: ufDoCargo,
+          slot: slots > 1 ? slot : null,
+          itens: itensCargo,
+        });
+      }
+    }
+    return out;
+  }, [itens, uf]);
 
   if (!quizCompleto(data.quiz)) {
     return (
@@ -247,14 +300,26 @@ export function Colinha() {
     );
   }
 
-  const escolher = (chave: string, escolha: Escolha | null) => {
-    setEscolhas((e) => {
-      const copia = { ...e };
-      if (escolha) copia[chave] = escolha;
-      else delete copia[chave];
-      return copia;
-    });
+  const escolhaDe = (grupo: Grupo): Escolha => escolhas[grupo.chave] ?? estadoInicial(grupo);
+
+  const mudar = (chave: string, escolha: Escolha) => {
+    setEscolhas((e) => ({ ...e, [chave]: escolha }));
   };
+
+  const itensPublicos = (): ColinhaItemPublico[] =>
+    grupos.map((g) => {
+      const escolha = escolhaDe(g);
+      const item = escolha.candidatoId != null ? g.itens.find((i) => i.cand.id === escolha.candidatoId) : undefined;
+      return {
+        cargo: g.cargo,
+        uf: g.uf,
+        vaga: g.slot,
+        nome: item ? item.cand.nome : escolha.nomeManual,
+        numero: escolha.numero || null,
+        foto: item?.cand.foto ?? null,
+        partido: item?.party?.sigla ?? null,
+      };
+    });
 
   const salvarImagem = async () => {
     if (!ref.current) return;
@@ -279,20 +344,28 @@ export function Colinha() {
 
   const compartilhar = async () => {
     setMsg(null);
-    const url = window.location.href;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Minha colinha — Capivara Política', url });
-      } catch {
-        // usuário cancelou o compartilhamento
-      }
-      return;
-    }
+    setCompartilhando(true);
     try {
-      await navigator.clipboard.writeText(url);
-      setMsg('Link copiado.');
+      const { token } = await api.saveColinha(itensPublicos());
+      const url = `${window.location.origin}/colinha/${token}`;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: 'Minha colinha — Capivara Política', url });
+        } catch {
+          // usuário cancelou o compartilhamento
+        }
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        setMsg('Link público copiado.');
+      } catch {
+        setMsg('Não consegui copiar o link.');
+      }
     } catch {
-      setMsg('Não consegui copiar o link.');
+      setMsg('Não consegui gerar o link público. Tente novamente.');
+    } finally {
+      setCompartilhando(false);
     }
   };
 
@@ -302,10 +375,21 @@ export function Colinha() {
         <div>
           <h1>Sua colinha</h1>
           <p className="muted">
-            O candidato mais compatível com você em cada cargo. Busque outro pelo nome ou número — se não estiver na nossa base, fica
-            só o que você digitou.
+            O candidato mais compatível com você em cada cargo. Escolha outro na lista ou digite o nome e o número — se não estiver na
+            nossa base, fica só o que você digitou.
           </p>
         </div>
+      </div>
+
+      <div className="colinha-uf-campo">
+        <label htmlFor="colinha-uf">Seu estado</label>
+        <select id="colinha-uf" value={uf} onChange={(e) => setUfEscolhida(e.target.value)}>
+          {UFS_ORDENADAS.map(([sigla, nome]) => (
+            <option key={sigla} value={sigla}>
+              {nome}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="colinha-folha" ref={ref}>
@@ -313,7 +397,7 @@ export function Colinha() {
           <img className="marca-img" src="/capivara.png" alt="" /> Capivara Política
         </div>
         {grupos.map((g) => (
-          <CartaoCargo key={g.chave} grupo={g} escolha={escolhas[g.chave]} onEscolher={(escolha) => escolher(g.chave, escolha)} />
+          <CartaoCargo key={g.chave} grupo={g} escolha={escolhaDe(g)} onMudar={(escolha) => mudar(g.chave, escolha)} />
         ))}
       </div>
 
@@ -322,8 +406,8 @@ export function Colinha() {
         <button className="btn secundario" onClick={salvarImagem} disabled={salvando}>
           {salvando ? 'Gerando...' : 'Salvar imagem'}
         </button>
-        <button className="btn" onClick={compartilhar}>
-          Compartilhar
+        <button className="btn" onClick={compartilhar} disabled={compartilhando}>
+          {compartilhando ? 'Gerando link...' : 'Compartilhar'}
         </button>
       </div>
     </div>
