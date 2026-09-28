@@ -27,6 +27,20 @@ export interface PartidoInput {
   logo: string | null;
 }
 
+export interface UsuarioInfo {
+  id: number;
+  username: string;
+  email: string | null;
+  isAdmin: boolean;
+  criadoEm: string;
+}
+
+export interface NovoAdminInput {
+  username: string;
+  email: string;
+  password: string;
+}
+
 export const api = {
   data: () => req<Data>('/api/data'),
   upload: (dataUrl: string) => req<{ url: string }>('/api/upload', 'POST', { dataUrl }),
@@ -42,4 +56,7 @@ export const api = {
   deleteResearch: (id: number) => req('/api/research/' + id, 'DELETE'),
   saveQuiz: (q: QuizState) => req('/api/quiz', 'PUT', q),
   importAll: (backup: unknown) => req('/api/import', 'POST', backup),
+  listUsers: () => req<UsuarioInfo[]>('/api/admin/users'),
+  createAdmin: (u: NovoAdminInput) => req<UsuarioInfo>('/api/admin/users', 'POST', u),
+  promoteUser: (id: number) => req('/api/admin/users/' + id + '/promote', 'POST'),
 };

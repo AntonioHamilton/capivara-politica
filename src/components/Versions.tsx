@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib/api.ts';
+import { useAuth } from '../lib/auth.tsx';
 import { dataHoraBR } from '../lib/format.ts';
 import { PERGUNTAS } from '../lib/questions.ts';
 import { useStore, versoes } from '../lib/store.tsx';
@@ -8,6 +9,7 @@ const ROTULO: Record<string, string> = { sim: 'Sim', nao: 'Não', sem_info: 'Sem
 
 export function Versions({ tipo, entidadeId }: { tipo: 'candidato' | 'partido'; entidadeId: number }) {
   const { data, refresh } = useStore();
+  const { user } = useAuth();
   const lista = versoes(data, tipo, entidadeId);
   const ativa = lista.find((v) => v.ativa);
   const [comparando, setComparando] = useState<number | null>(null);
@@ -42,17 +44,21 @@ export function Versions({ tipo, entidadeId }: { tipo: 'candidato' | 'partido'; 
                 <button className="btn secundario pequeno" onClick={() => setComparando(comparando === v.id ? null : v.id)}>
                   {comparando === v.id ? 'Fechar comparação' : 'Comparar com a atual'}
                 </button>
-                <button className="btn secundario pequeno" onClick={() => acao(() => api.activateResearch(v.id))}>
-                  Restaurar
-                </button>
+                {user.isAdmin && (
+                  <button className="btn secundario pequeno" onClick={() => acao(() => api.activateResearch(v.id))}>
+                    Restaurar
+                  </button>
+                )}
               </>
             )}
-            <button
-              className="btn texto pequeno"
-              onClick={() => window.confirm('Excluir esta versão da pesquisa?') && acao(() => api.deleteResearch(v.id))}
-            >
-              Excluir
-            </button>
+            {user.isAdmin && (
+              <button
+                className="btn texto pequeno"
+                onClick={() => window.confirm('Excluir esta versão da pesquisa?') && acao(() => api.deleteResearch(v.id))}
+              >
+                Excluir
+              </button>
+            )}
           </div>
         </div>
       ))}

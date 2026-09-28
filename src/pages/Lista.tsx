@@ -4,6 +4,7 @@ import { CandidateForm } from '../components/Forms.tsx';
 import { Avatar, Icon, PartyBadge } from '../components/ui.tsx';
 import { useItens } from '../lib/ranking.ts';
 import type { Item } from '../lib/ranking.ts';
+import { useAuth } from '../lib/auth.tsx';
 import { totalRespondidas } from '../lib/scoring.ts';
 import { useStore } from '../lib/store.tsx';
 import { CARGOS, UFS } from '../lib/types.ts';
@@ -17,6 +18,7 @@ function ordemCompat(a: Item, b: Item): number {
 
 export function Lista() {
   const { data } = useStore();
+  const { user } = useAuth();
   const itens = useItens();
   const navigate = useNavigate();
   const [adicionando, setAdicionando] = useState(false);
@@ -48,9 +50,11 @@ export function Lista() {
             {itens.length} na sua lista · {itens.filter((i) => i.pesquisa).length} pesquisados
           </p>
         </div>
-        <button className="btn" onClick={() => setAdicionando(true)}>
-          <Icon name="plus" /> Adicionar candidato
-        </button>
+        {user.isAdmin && (
+          <button className="btn" onClick={() => setAdicionando(true)}>
+            <Icon name="plus" /> Adicionar candidato
+          </button>
+        )}
       </div>
 
       {quizIncompleto && (
@@ -175,7 +179,9 @@ export function Lista() {
         </>
       )}
 
-      {adicionando && <CandidateForm onClose={() => setAdicionando(false)} onSaved={(id) => navigate(`/candidato/${id}`)} />}
+      {user.isAdmin && adicionando && (
+        <CandidateForm onClose={() => setAdicionando(false)} onSaved={(id) => navigate(`/candidato/${id}`)} />
+      )}
     </div>
   );
 }

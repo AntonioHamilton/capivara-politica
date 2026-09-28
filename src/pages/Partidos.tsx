@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PartyForm } from '../components/Forms.tsx';
 import { Avatar, Icon } from '../components/ui.tsx';
+import { useAuth } from '../lib/auth.tsx';
 import { usePartidos } from '../lib/ranking.ts';
 import { useStore } from '../lib/store.tsx';
 
 export function Partidos() {
   const { data } = useStore();
+  const { user } = useAuth();
   const partidos = usePartidos();
   const navigate = useNavigate();
   const [adicionando, setAdicionando] = useState(false);
@@ -22,9 +24,11 @@ export function Partidos() {
           <h1>Partidos</h1>
           <p className="muted">Pesquise cada partido para ver quais combinam mais com o seu perfil.</p>
         </div>
-        <button className="btn" onClick={() => setAdicionando(true)}>
-          <Icon name="plus" /> Adicionar partido
-        </button>
+        {user.isAdmin && (
+          <button className="btn" onClick={() => setAdicionando(true)}>
+            <Icon name="plus" /> Adicionar partido
+          </button>
+        )}
       </div>
 
       {ordenados.length === 0 ? (
@@ -55,7 +59,7 @@ export function Partidos() {
         </ul>
       )}
 
-      {adicionando && <PartyForm onClose={() => setAdicionando(false)} onSaved={(id) => navigate(`/partido/${id}`)} />}
+      {user.isAdmin && adicionando && <PartyForm onClose={() => setAdicionando(false)} onSaved={(id) => navigate(`/partido/${id}`)} />}
     </div>
   );
 }

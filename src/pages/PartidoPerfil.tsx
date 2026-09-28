@@ -6,6 +6,7 @@ import { ResearchModal } from '../components/ResearchModal.tsx';
 import { Avatar, Fontes, Icon, Tabs } from '../components/ui.tsx';
 import { Versions } from '../components/Versions.tsx';
 import { api } from '../lib/api.ts';
+import { useAuth } from '../lib/auth.tsx';
 import { dataBR } from '../lib/format.ts';
 import { promptPartido } from '../lib/prompt.ts';
 import { useItens, usePartidos } from '../lib/ranking.ts';
@@ -17,6 +18,7 @@ type Aba = 'posicoes' | 'candidatos' | 'pesquisas';
 export function PartidoPerfil() {
   const { id } = useParams();
   const { data, refresh } = useStore();
+  const { user } = useAuth();
   const partidos = usePartidos();
   const itens = useItens();
   const navigate = useNavigate();
@@ -71,17 +73,19 @@ export function PartidoPerfil() {
               {d.resumo} <Fontes fontes={d.fontes} />
             </p>
           )}
-          <div className="perfil-acoes">
-            <button className="btn" onClick={() => setPesquisando(true)}>
-              <Icon name="refresh" /> Reload
-            </button>
-            <button className="btn secundario" onClick={() => setEditando(true)}>
-              Editar
-            </button>
-            <button className="btn texto" onClick={remover}>
-              Remover partido
-            </button>
-          </div>
+          {user.isAdmin && (
+            <div className="perfil-acoes">
+              <button className="btn" onClick={() => setPesquisando(true)}>
+                <Icon name="refresh" /> Reload
+              </button>
+              <button className="btn secundario" onClick={() => setEditando(true)}>
+                Editar
+              </button>
+              <button className="btn texto" onClick={remover}>
+                Remover partido
+              </button>
+            </div>
+          )}
         </div>
         <div className="perfil-nota">
           {compat?.pct != null ? (
@@ -141,7 +145,7 @@ export function PartidoPerfil() {
 
       {aba === 'pesquisas' && <Versions tipo="partido" entidadeId={party.id} />}
 
-      {pesquisando && (
+      {user.isAdmin && pesquisando && (
         <ResearchModal
           tipo="partido"
           entidadeId={party.id}
@@ -150,7 +154,7 @@ export function PartidoPerfil() {
           onClose={() => setPesquisando(false)}
         />
       )}
-      {editando && <PartyForm party={party} onClose={() => setEditando(false)} />}
+      {user.isAdmin && editando && <PartyForm party={party} onClose={() => setEditando(false)} />}
     </div>
   );
 }

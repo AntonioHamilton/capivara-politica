@@ -7,6 +7,7 @@ import { ResearchModal } from '../components/ResearchModal.tsx';
 import { Avatar, Fontes, Icon, PartyBadge, Tabs } from '../components/ui.tsx';
 import { Versions } from '../components/Versions.tsx';
 import { api } from '../lib/api.ts';
+import { useAuth } from '../lib/auth.tsx';
 import { brl, dataBR } from '../lib/format.ts';
 import { promptCandidato } from '../lib/prompt.ts';
 import { useItens } from '../lib/ranking.ts';
@@ -42,6 +43,7 @@ function Info({ rotulo, valor }: { rotulo: string; valor: ReactNode }) {
 export function Perfil() {
   const { id } = useParams();
   const { data, refresh } = useStore();
+  const { user } = useAuth();
   const itens = useItens();
   const navigate = useNavigate();
   const [aba, setAba] = useState<Aba>('visao');
@@ -104,17 +106,19 @@ export function Perfil() {
               ))}
             </div>
           )}
-          <div className="perfil-acoes">
-            <button className="btn" onClick={() => setPesquisando(true)}>
-              <Icon name="refresh" /> Reload
-            </button>
-            <button className="btn secundario" onClick={() => setEditando(true)}>
-              Editar
-            </button>
-            <button className="btn texto" onClick={remover}>
-              Remover da lista
-            </button>
-          </div>
+          {user.isAdmin && (
+            <div className="perfil-acoes">
+              <button className="btn" onClick={() => setPesquisando(true)}>
+                <Icon name="refresh" /> Reload
+              </button>
+              <button className="btn secundario" onClick={() => setEditando(true)}>
+                Editar
+              </button>
+              <button className="btn texto" onClick={remover}>
+                Remover da lista
+              </button>
+            </div>
+          )}
         </div>
         <div className="perfil-nota">
           {it.conflito ? (
@@ -262,9 +266,11 @@ export function Perfil() {
         ) : (
           <div className="vazio">
             <p>Este candidato ainda não foi pesquisado.</p>
-            <button className="btn" onClick={() => setPesquisando(true)}>
-              <Icon name="refresh" /> Gerar prompt de pesquisa
-            </button>
+            {user.isAdmin && (
+              <button className="btn" onClick={() => setPesquisando(true)}>
+                <Icon name="refresh" /> Gerar prompt de pesquisa
+              </button>
+            )}
           </div>
         ))}
 
@@ -296,7 +302,7 @@ export function Perfil() {
 
       {aba === 'pesquisas' && <Versions tipo="candidato" entidadeId={cand.id} />}
 
-      {pesquisando && (
+      {user.isAdmin && pesquisando && (
         <ResearchModal
           tipo="candidato"
           entidadeId={cand.id}
@@ -305,7 +311,7 @@ export function Perfil() {
           onClose={() => setPesquisando(false)}
         />
       )}
-      {editando && <CandidateForm candidate={cand} onClose={() => setEditando(false)} />}
+      {user.isAdmin && editando && <CandidateForm candidate={cand} onClose={() => setEditando(false)} />}
     </div>
   );
 }
