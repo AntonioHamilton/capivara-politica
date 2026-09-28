@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toPng } from 'html-to-image';
 import { Avatar, PartyBadge } from '../components/ui.tsx';
@@ -233,6 +233,7 @@ export function Colinha() {
   const { data } = useStore();
   const itens = useItens();
   const [escolhas, setEscolhas] = useState<Record<string, Escolha>>({});
+  const [carregado, setCarregado] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [compartilhando, setCompartilhando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -284,22 +285,6 @@ export function Colinha() {
     return out;
   }, [itens, uf]);
 
-  if (!quizCompleto(data.quiz)) {
-    return (
-      <div className="pagina estreita">
-        <div className="pagina-topo">
-          <h1>Colinha</h1>
-        </div>
-        <div className="aviso">
-          <span>Termine o quiz do seu perfil político para gerar sua colinha personalizada.</span>
-          <Link className="btn pequeno" to="/app/quiz">
-            Fazer o quiz
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   const escolhaDe = (grupo: Grupo): Escolha => escolhas[grupo.chave] ?? estadoInicial(grupo);
 
   const mudar = (chave: string, escolha: Escolha) => {
@@ -320,6 +305,72 @@ export function Colinha() {
         partido: item?.party?.sigla ?? null,
       };
     });
+
+  // ao abrir a página, carrega a colinha já salva do usuário (se existir) em vez de
+  // sobrescrever com a sugestão automática por compatibilidade
+  useEffect(() => {
+    let ativo = true;
+    api
+      .colinhaSalva()
+      .then((salva) => {
+        if (!ativo || !salva?.itens.length) return;
+        const ufSalva = salva.itens.find((it) => it.uf !== 'BR')?.uf;
+        if (ufSalva) setUfEscolhida(ufSalva);
+        const novas: Record<string, Escolha> = {};
+        for (const it of salva.itens) {
+          const chave = it.vaga ? `${it.cargo}:${it.uf}:${it.vaga}` : `${it.cargo}:${it.uf}`;
+          const achado = itens.find((i) => i.cand.cargo === it.cargo && i.cand.uf === it.uf && i.cand.nome === it.nome);
+          novas[chave] = achado
+            ? { candidatoId: achado.cand.id, nomeManual: '', numero: it.numero ?? '' }
+            : { candidatoId: null, nomeManual: it.nome, numero: it.numero ?? '' };
+        }
+        setEscolhas(novas);
+      })
+      .finally(() => {
+        if (ativo) setCarregado(true);
+      });
+    return () => {
+      ativo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // salva automaticamente qualquer edição do usuário, uma vez que a colinha salva já foi carregada
+  useEffect(() => {
+    if (!carregado || Object.keys(escolhas).length === 0) return;
+    const t = setTimeout(() => {
+      api.saveColinha(itensPublicos()).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [escolhas, carregado]);
+
+  if (!quizCompleto(data.quiz)) {
+    return (
+      <div className="pagina estreita">
+        <div className="pagina-topo">
+          <h1>Colinha</h1>
+        </div>
+        <div className="aviso">
+          <span>Termine o quiz do seu perfil político para gerar sua colinha personalizada.</span>
+          <Link className="btn pequeno" to="/app/quiz">
+            Fazer o quiz
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!carregado) {
+    return (
+      <div className="pagina estreita">
+        <div className="pagina-topo">
+          <h1>Sua colinha</h1>
+        </div>
+        <p className="muted">Carregando...</p>
+      </div>
+    );
+  }
 
   const salvarImagem = async () => {
     if (!ref.current) return;

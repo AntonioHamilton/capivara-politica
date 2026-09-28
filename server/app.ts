@@ -369,6 +369,14 @@ api.put('/quiz', async (req, res) => {
   res.json({ ok: true });
 });
 
+api.get('/colinha', async (req, res) => {
+  const r = await get<{ itens: string; atualizadoEm: string }>(
+    'SELECT itens, atualizado_em AS atualizadoEm FROM colinhas WHERE user_id = ?',
+    [usuario(req).userId],
+  );
+  res.json(r ? { itens: JSON.parse(r.itens), atualizadoEm: r.atualizadoEm } : null);
+});
+
 api.put('/colinha', async (req, res) => {
   if (!Array.isArray(req.body.itens)) throw new HttpError(400, 'Itens inválidos');
   const userId = usuario(req).userId;

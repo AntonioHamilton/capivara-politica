@@ -84,5 +84,6 @@ export const api = {
   sendFeedback: (mensagem: string) => req('/api/feedback', 'POST', { mensagem }),
   listFeedback: () => req<FeedbackInfo[]>('/api/feedback'),
   saveColinha: (itens: ColinhaItemPublico[]) => req<{ token: string }>('/api/colinha', 'PUT', { itens }),
+  colinhaSalva: () => req<ColinhaPublica | null>('/api/colinha'),
   colinhaPublica: (token: string) => req<ColinhaPublica>('/api/colinha/' + token),
 };
