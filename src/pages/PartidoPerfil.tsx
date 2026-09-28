@@ -30,7 +30,7 @@ export function PartidoPerfil() {
   if (!item) {
     return (
       <div className="pagina">
-        <Link to="/partidos" className="voltar">
+        <Link to="/app/partidos" className="voltar">
           <Icon name="back" /> Voltar para os partidos
         </Link>
         <p className="vazio">Partido não encontrado.</p>
@@ -47,7 +47,7 @@ export function PartidoPerfil() {
     try {
       await api.deleteParty(party.id);
       await refresh();
-      navigate('/partidos');
+      navigate('/app/partidos');
     } catch (e) {
       window.alert((e as Error).message);
     }
@@ -55,7 +55,7 @@ export function PartidoPerfil() {
 
   return (
     <div className="pagina">
-      <Link to="/partidos" className="voltar">
+      <Link to="/app/partidos" className="voltar">
         <Icon name="back" /> Voltar para os partidos
       </Link>
 
@@ -126,7 +126,7 @@ export function PartidoPerfil() {
           <ul className="lista">
             {candidatos.map((i) => (
               <li key={i.cand.id}>
-                <Link to={`/candidato/${i.cand.id}`} className="linha-candidato simples">
+                <Link to={`/app/candidato/${i.cand.id}`} className="linha-candidato simples">
                   <Avatar src={i.cand.foto} nome={i.cand.nome} size={48} />
                   <span className="nome">{i.cand.nome}</span>
                   <span className="col-cargo">

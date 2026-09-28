@@ -231,6 +231,25 @@ api.post('/admin/users/:id/promote', exigirAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+api.post('/feedback', async (req, res) => {
+  const mensagem = texto(req.body.mensagem, 'Mensagem');
+  await run('INSERT INTO feedback (user_id, mensagem, criado_em) VALUES (?, ?, ?)', [
+    usuario(req).userId,
+    mensagem,
+    new Date().toISOString(),
+  ]);
+  res.json({ ok: true });
+});
+
+api.get('/feedback', exigirAdmin, async (_req, res) => {
+  const lista = await all<{ id: number; mensagem: string; criadoEm: string; username: string; email: string | null }>(
+    `SELECT f.id, f.mensagem, f.criado_em AS criadoEm, u.username, u.email
+     FROM feedback f JOIN users u ON u.id = f.user_id
+     ORDER BY f.id DESC`,
+  );
+  res.json(lista);
+});
+
 api.get('/data', async (req, res) => {
   res.json(await listarTudo(usuario(req).userId));
 });

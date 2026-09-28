@@ -54,7 +54,7 @@ export function Perfil() {
   if (!it) {
     return (
       <div className="pagina">
-        <Link to="/" className="voltar">
+        <Link to="/app" className="voltar">
           <Icon name="back" /> Voltar para a lista
         </Link>
         <p className="vazio">Candidato não encontrado.</p>
@@ -69,14 +69,14 @@ export function Perfil() {
     if (!window.confirm(`Remover ${cand.nome} da lista? As pesquisas salvas dele também serão apagadas.`)) return;
     await api.deleteCandidate(cand.id);
     await refresh();
-    navigate('/');
+    navigate('/app');
   };
 
   const redes = Object.entries(d?.basico.redes ?? {}).filter(([, v]) => v);
 
   return (
     <div className="pagina">
-      <Link to="/" className="voltar">
+      <Link to="/app" className="voltar">
         <Icon name="back" /> Voltar para a lista
       </Link>
 

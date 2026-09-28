@@ -34,12 +34,12 @@ export function EsqueciSenha() {
         {enviado ? (
           <>
             <p className="muted">Se esse email tiver uma conta, enviamos um link para redefinir a senha. Confira sua caixa de entrada.</p>
-            <Link to="/" className="btn">
+            <Link to="/app" className="btn">
               Voltar para o login
             </Link>
           </>
         ) : (
-          <form onSubmit={onSubmit}>
+          <form className="form" onSubmit={onSubmit}>
             <div className="campo">
               <label>Email</label>
               <input required autoFocus type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
@@ -48,7 +48,7 @@ export function EsqueciSenha() {
             <button className="btn" type="submit" disabled={enviando}>
               {enviando ? 'Enviando...' : 'Enviar link de recuperação'}
             </button>
-            <Link to="/" className="btn texto pequeno">
+            <Link to="/app" className="btn texto pequeno">
               Voltar para o login
             </Link>
           </form>

@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom';
 import { Avatar, Icon } from './components/ui.tsx';
 import { AuthGate, useAuth } from './lib/auth.tsx';
-import { StoreProvider } from './lib/store.tsx';
+import { quizCompleto } from './lib/scoring.ts';
+import { StoreProvider, useStore } from './lib/store.tsx';
+import { Colinha } from './pages/Colinha.tsx';
 import { Conta } from './pages/Conta.tsx';
 import { Dados } from './pages/Dados.tsx';
 import { EsqueciSenha } from './pages/EsqueciSenha.tsx';
+import { Feedback } from './pages/Feedback.tsx';
+import { Landing } from './pages/Landing.tsx';
 import { Lista } from './pages/Lista.tsx';
 import { PartidoPerfil } from './pages/PartidoPerfil.tsx';
 import { Partidos } from './pages/Partidos.tsx';
@@ -34,6 +38,7 @@ function TemaToggle() {
 
 function UserMenu() {
   const { user, logout } = useAuth();
+  const { data } = useStore();
   const [aberto, setAberto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -71,12 +76,17 @@ function UserMenu() {
               )}
             </span>
           </div>
-          <NavLink to="/quiz" role="menuitem" onClick={() => setAberto(false)}>
+          <NavLink to="/app/quiz" role="menuitem" onClick={() => setAberto(false)}>
             Perfil
           </NavLink>
-          <NavLink to="/conta" role="menuitem" onClick={() => setAberto(false)}>
+          <NavLink to="/app/conta" role="menuitem" onClick={() => setAberto(false)}>
             Conta
           </NavLink>
+          {quizCompleto(data.quiz) && (
+            <NavLink to="/app/feedback" role="menuitem" onClick={() => setAberto(false)}>
+              Feedback
+            </NavLink>
+          )}
           <button
             type="button"
             role="menuitem"
@@ -95,18 +105,20 @@ function UserMenu() {
 
 function Topo({ menuAberto, setMenuAberto }: { menuAberto: boolean; setMenuAberto: (v: boolean) => void }) {
   const { user } = useAuth();
+  const { data } = useStore();
   return (
     <header className="topo">
       <div className="topo-int">
-        <NavLink to="/" className="marca" onClick={() => setMenuAberto(false)}>
+        <NavLink to="/app" className="marca" onClick={() => setMenuAberto(false)}>
           <img className="marca-img" src="/capivara.png" alt="" /> Capivara Política
         </NavLink>
         <nav className={menuAberto ? 'aberto' : ''} onClick={() => setMenuAberto(false)}>
-          <NavLink to="/" end>
+          <NavLink to="/app" end>
             Candidatos
           </NavLink>
-          <NavLink to="/partidos">Partidos</NavLink>
-          {user.isAdmin && <NavLink to="/dados">Dados</NavLink>}
+          <NavLink to="/app/partidos">Partidos</NavLink>
+          {quizCompleto(data.quiz) && <NavLink to="/app/colinha">Colinha</NavLink>}
+          {user.isAdmin && <NavLink to="/app/dados">Dados</NavLink>}
         </nav>
         <TemaToggle />
         <UserMenu />
@@ -127,26 +139,26 @@ function Conteudo() {
   const [menuAberto, setMenuAberto] = useState(false);
   const { user } = useAuth();
   return (
-    <>
+    <StoreProvider>
       <Topo menuAberto={menuAberto} setMenuAberto={setMenuAberto} />
       <main>
-        <StoreProvider>
-          <Routes>
-            <Route path="/" element={<Lista />} />
-            <Route path="/candidato/:id" element={<Perfil />} />
-            <Route path="/partidos" element={<Partidos />} />
-            <Route path="/partido/:id" element={<PartidoPerfil />} />
-            <Route path="/quiz" element={<Quiz />} />
-            <Route path="/conta" element={<Conta />} />
-            <Route
-              path="/dados"
-              element={user.isAdmin ? <Dados /> : <p className="estado-tela">Apenas o administrador acessa esta página.</p>}
-            />
-            <Route path="*" element={<p className="estado-tela">Página não encontrada.</p>} />
-          </Routes>
-        </StoreProvider>
+        <Routes>
+          <Route path="/" element={<Lista />} />
+          <Route path="/candidato/:id" element={<Perfil />} />
+          <Route path="/partidos" element={<Partidos />} />
+          <Route path="/partido/:id" element={<PartidoPerfil />} />
+          <Route path="/quiz" element={<Quiz />} />
+          <Route path="/conta" element={<Conta />} />
+          <Route path="/feedback" element={<Feedback />} />
+          <Route path="/colinha" element={<Colinha />} />
+          <Route
+            path="/dados"
+            element={user.isAdmin ? <Dados /> : <p className="estado-tela">Apenas o administrador acessa esta página.</p>}
+          />
+          <Route path="*" element={<p className="estado-tela">Página não encontrada.</p>} />
+        </Routes>
       </main>
-    </>
+    </StoreProvider>
   );
 }
 
@@ -154,10 +166,11 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<Landing />} />
         <Route path="/esqueci-senha" element={<EsqueciSenha />} />
         <Route path="/redefinir-senha" element={<RedefinirSenha />} />
         <Route
-          path="/*"
+          path="/app/*"
           element={
             <AuthGate>
               <Conteudo />

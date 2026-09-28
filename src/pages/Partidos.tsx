@@ -37,7 +37,7 @@ export function Partidos() {
         <ul className="grade-partidos">
           {ordenados.map(({ party, compat }) => (
             <li key={party.id}>
-              <Link to={`/partido/${party.id}`} className="card-partido">
+              <Link to={`/app/partido/${party.id}`} className="card-partido">
                 <Avatar src={party.logo} nome={party.sigla} size={56} />
                 <span className="nome">
                   {party.sigla}
@@ -59,7 +59,7 @@ export function Partidos() {
         </ul>
       )}
 
-      {user.isAdmin && adicionando && <PartyForm onClose={() => setAdicionando(false)} onSaved={(id) => navigate(`/partido/${id}`)} />}
+      {user.isAdmin && adicionando && <PartyForm onClose={() => setAdicionando(false)} onSaved={(id) => navigate(`/app/partido/${id}`)} />}
     </div>
   );
 }

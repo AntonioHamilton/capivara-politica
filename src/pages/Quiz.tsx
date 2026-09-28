@@ -83,7 +83,7 @@ export function Quiz() {
             <Icon name="back" size={16} /> Voltar
           </button>
           <button className="btn texto" onClick={() => responder('pular')}>
-            Pular
+            Próxima
           </button>
         </div>
       </div>
@@ -176,7 +176,7 @@ function Resultado({ onRefazer, onRevisar }: { onRefazer: () => void; onRevisar:
             <ol className="ranking-partidos">
               {ranking.map((p, i) => (
                 <li key={p.party.id} className={i === 0 ? 'primeiro' : ''}>
-                  <Link to={`/partido/${p.party.id}`}>
+                  <Link to={`/app/partido/${p.party.id}`}>
                     <span className="pos">{i + 1}º</span>
                     {p.party.logo && <img src={p.party.logo} alt="" />}
                     <span className="nome">
@@ -190,7 +190,7 @@ function Resultado({ onRefazer, onRevisar }: { onRefazer: () => void; onRevisar:
             </ol>
           ) : (
             <p className="muted">
-              Nenhum partido pesquisado ainda. Abra a tela de <Link to="/partidos">Partidos</Link> e use o Reload em cada um para
+              Nenhum partido pesquisado ainda. Abra a tela de <Link to="/app/partidos">Partidos</Link> e use o Reload em cada um para
               descobrir qual mais combina com você.
             </p>
           )}
@@ -208,7 +208,7 @@ function Resultado({ onRefazer, onRevisar }: { onRefazer: () => void; onRevisar:
               ? 'Para você, condenação por corrupção elimina o candidato.'
               : 'Para você, condenação por corrupção não elimina o candidato.'}
         </span>
-        <Link className="btn pequeno" to="/">
+        <Link className="btn pequeno" to="/app">
           Ver candidatos
         </Link>
       </div>

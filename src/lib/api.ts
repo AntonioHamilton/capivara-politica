@@ -41,6 +41,14 @@ export interface NovoAdminInput {
   password: string;
 }
 
+export interface FeedbackInfo {
+  id: number;
+  mensagem: string;
+  criadoEm: string;
+  username: string;
+  email: string | null;
+}
+
 export const api = {
   data: () => req<Data>('/api/data'),
   upload: (dataUrl: string) => req<{ url: string }>('/api/upload', 'POST', { dataUrl }),
@@ -59,4 +67,6 @@ export const api = {
   listUsers: () => req<UsuarioInfo[]>('/api/admin/users'),
   createAdmin: (u: NovoAdminInput) => req<UsuarioInfo>('/api/admin/users', 'POST', u),
   promoteUser: (id: number) => req('/api/admin/users/' + id + '/promote', 'POST'),
+  sendFeedback: (mensagem: string) => req('/api/feedback', 'POST', { mensagem }),
+  listFeedback: () => req<FeedbackInfo[]>('/api/feedback'),
 };

@@ -64,7 +64,7 @@ export function Lista() {
               ? 'Faça o quiz do seu perfil político para ver a compatibilidade com cada candidato.'
               : 'Você ainda não terminou o quiz. A compatibilidade pode mudar.'}
           </span>
-          <Link className="btn pequeno" to="/quiz">
+          <Link className="btn pequeno" to="/app/quiz">
             {totalRespondidas(data.quiz) === 0 ? 'Fazer o quiz' : 'Continuar o quiz'}
           </Link>
         </div>
@@ -133,7 +133,7 @@ export function Lista() {
           <ul className="lista">
             {visiveis.map((it, idx) => (
               <li key={it.cand.id}>
-                <Link to={`/candidato/${it.cand.id}`} className="linha-candidato">
+                <Link to={`/app/candidato/${it.cand.id}`} className="linha-candidato">
                   <span className="pos">{idx + 1}º</span>
                   <Avatar src={it.cand.foto} nome={it.cand.nome} size={56} />
                   <span className="nome">
@@ -180,7 +180,7 @@ export function Lista() {
       )}
 
       {user.isAdmin && adicionando && (
-        <CandidateForm onClose={() => setAdicionando(false)} onSaved={(id) => navigate(`/candidato/${id}`)} />
+        <CandidateForm onClose={() => setAdicionando(false)} onSaved={(id) => navigate(`/app/candidato/${id}`)} />
       )}
     </div>
   );

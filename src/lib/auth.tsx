@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 export interface User {
   id: number;
@@ -58,7 +58,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
 }
 
 function LoginPage({ onEntrar }: { onEntrar: (u: User) => void }) {
-  const [modo, setModo] = useState<'login' | 'registro'>('login');
+  const [params] = useSearchParams();
+  const [modo, setModo] = useState<'login' | 'registro'>(params.get('modo') === 'registro' ? 'registro' : 'login');
   const [identificador, setIdentificador] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');

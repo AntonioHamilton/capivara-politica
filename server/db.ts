@@ -102,6 +102,13 @@ await db.executeMultiple(`
     ativa INTEGER NOT NULL DEFAULT 0,
     dados TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mensagem TEXT NOT NULL,
+    criado_em TEXT NOT NULL
+  );
 `);
 
 // Bancos criados antes do campo de email existir não têm a coluna.

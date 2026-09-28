@@ -38,12 +38,12 @@ export function RedefinirSenha() {
         ) : feito ? (
           <>
             <p className="muted">Senha redefinida com sucesso. Você já pode entrar com a nova senha.</p>
-            <Link to="/" className="btn">
+            <Link to="/app" className="btn">
               Ir para o login
             </Link>
           </>
         ) : (
-          <form onSubmit={onSubmit}>
+          <form className="form" onSubmit={onSubmit}>
             <div className="campo">
               <label>Nova senha</label>
               <input

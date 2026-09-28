@@ -25,7 +25,7 @@ export function compatibilidade(
   alvo: RespostasAlvo,
   polemicas: { status: string; categoria?: string | null }[] = [],
 ): Compat {
-  let pesoTotal = 0;
+  let pesoTotalUsuario = 0;
   let pesoOk = 0;
   let comparadas = 0;
   let respondidas = 0;
@@ -33,12 +33,14 @@ export function compatibilidade(
 
   for (const p of PERGUNTAS) {
     const u = quiz.respostas[p.id];
-    const a = alvo[p.id];
-    if (u && u.r !== 'pular') respondidas++;
-    if (!u || u.r === 'pular' || !a || a.resposta === 'sem_info') continue;
+    if (!u || u.r === 'pular') continue;
+    respondidas++;
     const peso = u.imp ? 3 : 1;
+    pesoTotalUsuario += peso;
+
+    const a = alvo[p.id];
+    if (!a || a.resposta === 'sem_info') continue;
     comparadas++;
-    pesoTotal += peso;
     if (u.r === a.resposta) pesoOk += peso;
     else if (u.imp) conflitos.push({ id: p.id, motivo: `Diverge em algo inegociável: ${p.usuario}` });
   }
@@ -49,7 +51,7 @@ export function compatibilidade(
 
   const minimo = Math.max(MIN_COMPARADAS, Math.ceil(MIN_COBERTURA * respondidas));
   return {
-    pct: comparadas >= minimo ? Math.round((100 * pesoOk) / pesoTotal) : null,
+    pct: comparadas >= minimo ? Math.round((100 * pesoOk) / pesoTotalUsuario) : null,
     comparadas,
     respondidas,
     minimo,
@@ -66,6 +68,10 @@ export function totalComResposta(quiz: QuizState): number {
     const r = quiz.respostas[p.id];
     return r && r.r !== 'pular';
   }).length;
+}
+
+export function quizCompleto(quiz: QuizState): boolean {
+  return quiz.eticaEliminatoria !== null && PERGUNTAS.every((p) => quiz.respostas[p.id]);
 }
 
 export function posicaoNosEixos(quiz: QuizState): Record<Eixo, number | null> {

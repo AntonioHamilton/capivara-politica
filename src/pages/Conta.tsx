@@ -44,7 +44,7 @@ export function Conta() {
 
       <section className="card">
         <h3>Alterar senha</h3>
-        <form onSubmit={onSubmit}>
+        <form className="form" onSubmit={onSubmit}>
           <div className="campo">
             <label>Senha atual</label>
             <input
