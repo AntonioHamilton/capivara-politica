@@ -3,4 +3,3 @@ dist/
 data/
 *.log
 .env
-api/index.js

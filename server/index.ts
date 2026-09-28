@@ -1,8 +1,8 @@
 import { createServer as createViteServer } from 'vite';
 import { exec } from 'node:child_process';
 import path from 'node:path';
-import { app } from '../api/_lib/app.ts';
-import { dataDir } from '../api/_lib/db.ts';
+import { app } from './app.ts';
+import { dataDir } from './db.ts';
 
 const PORT = Number(process.env.PORT ?? 4310);
 

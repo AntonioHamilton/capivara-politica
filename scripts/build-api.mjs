@@ -1,11 +1,13 @@
 import { build } from 'esbuild';
-import { rm } from 'node:fs/promises';
 
 // Empacota a function serverless num único arquivo JS autocontido (mantendo
-// só os pacotes de node_modules como externos). Evita depender do bundler da
-// Vercel resolver corretamente os módulos .ts locais em runtime.
+// só os pacotes de node_modules como externos). A Vercel só transpila o
+// arquivo de entrada de uma function, não os módulos locais que ele importa
+// com extensão .ts explícita — então em vez de depender disso, geramos
+// api/index.js pronto e o commitamos: é o único arquivo que existe em api/,
+// sem fonte .ts nenhuma ali para causar ambiguidade.
 await build({
-  entryPoints: ['api/index.ts'],
+  entryPoints: ['server/serverless.ts'],
   outfile: 'api/index.js',
   bundle: true,
   platform: 'node',
@@ -14,8 +16,3 @@ await build({
   packages: 'external',
   allowOverwrite: true,
 });
-
-// Remove as fontes .ts pra não ficarem ambíguas ao lado do .js gerado
-// (a Vercel trataria os dois como rotas separadas pra /api).
-await rm('api/index.ts');
-await rm('api/_lib', { recursive: true, force: true });
