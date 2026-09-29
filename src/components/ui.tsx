@@ -95,7 +95,17 @@ const LOADING_LARGURA_CAPIVARA = 44;
 // para medir) — então ela avança de forma otimista e desacelera perto de 90%, e só quando
 // `pronto` chega vai correndo até 100% antes de liberar a próxima tela, pra nunca "travar"
 // nem cortar no meio.
-export function Loading({ texto = 'Carregando...', pronto = false, onCompleto }: { texto?: string; pronto?: boolean; onCompleto?: () => void }) {
+export function Loading({
+  texto = 'Carregando...',
+  pronto = false,
+  onCompleto,
+  variante = 'tela',
+}: {
+  texto?: string;
+  pronto?: boolean;
+  onCompleto?: () => void;
+  variante?: 'tela' | 'inline';
+}) {
   const [pct, setPct] = useState(0);
   const semAnimacao = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -137,7 +147,7 @@ export function Loading({ texto = 'Carregando...', pronto = false, onCompleto }:
   const alcance = LOADING_LARGURA_PISTA - LOADING_LARGURA_CAPIVARA;
 
   return (
-    <div className="loading-tela">
+    <div className={`loading-tela${variante === 'inline' ? ' inline' : ''}`}>
       <div className="loading-pista" style={{ width: LOADING_LARGURA_PISTA }}>
         <img
           className="loading-capivara"

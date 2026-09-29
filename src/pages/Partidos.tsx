@@ -4,10 +4,8 @@ import { PartyForm } from '../components/Forms.tsx';
 import { Avatar, Icon } from '../components/ui.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { usePartidos } from '../lib/ranking.ts';
-import { useStore } from '../lib/store.tsx';
 
 export function Partidos() {
-  const { data } = useStore();
   const { user } = useAuth();
   const partidos = usePartidos();
   const navigate = useNavigate();
@@ -50,9 +48,7 @@ export function Partidos() {
                     <span className="selo-neutro">{compat ? 'Dados insuficientes' : 'Não pesquisado'}</span>
                   )}
                 </span>
-                <small className="muted">
-                  {data.candidates.filter((c) => c.partyId === party.id).length} candidato(s) na sua lista
-                </small>
+                <small className="muted">{party.candidatosCount} candidato(s)</small>
               </Link>
             </li>
           ))}

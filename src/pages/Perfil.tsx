@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CandidateForm } from '../components/Forms.tsx';
@@ -7,10 +7,10 @@ import { ResearchModal } from '../components/ResearchModal.tsx';
 import { Avatar, Fontes, Icon, PartyBadge, Tabs } from '../components/ui.tsx';
 import { Versions } from '../components/Versions.tsx';
 import { api } from '../lib/api.ts';
+import type { ItemCandidatoDetalhe } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { brl, dataBR } from '../lib/format.ts';
 import { promptCandidato } from '../lib/prompt.ts';
-import { useItens } from '../lib/ranking.ts';
 import { useStore } from '../lib/store.tsx';
 import { CARGOS, ufLabel } from '../lib/types.ts';
 
@@ -44,20 +44,45 @@ export function Perfil() {
   const { id } = useParams();
   const { data, refresh } = useStore();
   const { user } = useAuth();
-  const itens = useItens();
   const navigate = useNavigate();
   const [aba, setAba] = useState<Aba>('visao');
   const [pesquisando, setPesquisando] = useState(false);
   const [editando, setEditando] = useState(false);
+  const [it, setIt] = useState<ItemCandidatoDetalhe | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
-  const it = itens.find((i) => String(i.cand.id) === id);
-  if (!it) {
+  const recarregar = useCallback(() => {
+    if (!id) return;
+    setCarregando(true);
+    api
+      .candidato(Number(id))
+      .then(setIt)
+      .catch((e: Error) => setErro(e.message))
+      .finally(() => setCarregando(false));
+  }, [id]);
+
+  useEffect(() => {
+    setIt(null);
+    setErro(null);
+    recarregar();
+  }, [recarregar]);
+
+  if (carregando && !it) {
+    return (
+      <div className="pagina">
+        <p className="muted">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (erro || !it) {
     return (
       <div className="pagina">
         <Link to="/app" className="voltar">
           <Icon name="back" /> Voltar para a lista
         </Link>
-        <p className="vazio">Candidato não encontrado.</p>
+        <p className="vazio">{erro ?? 'Candidato não encontrado.'}</p>
       </div>
     );
   }
@@ -300,7 +325,7 @@ export function Perfil() {
           <p className="vazio">Ainda não há pesquisa. Use o botão Reload.</p>
         ))}
 
-      {aba === 'pesquisas' && <Versions tipo="candidato" entidadeId={cand.id} />}
+      {aba === 'pesquisas' && <Versions tipo="candidato" entidadeId={cand.id} onChange={recarregar} />}
 
       {user.isAdmin && pesquisando && (
         <ResearchModal
@@ -309,9 +334,12 @@ export function Perfil() {
           titulo={cand.nome}
           prompt={promptCandidato(cand, party)}
           onClose={() => setPesquisando(false)}
+          onSaved={recarregar}
         />
       )}
-      {user.isAdmin && editando && <CandidateForm candidate={cand} onClose={() => setEditando(false)} />}
+      {user.isAdmin && editando && (
+        <CandidateForm candidate={cand} onClose={() => setEditando(false)} onSaved={recarregar} />
+      )}
     </div>
   );
 }

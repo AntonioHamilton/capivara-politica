@@ -326,6 +326,207 @@ function emailRecuperacaoHtml(link) {
   );
 }
 
+// src/lib/questions.ts
+var q = (id, eixo, sinal, usuario2, candidato) => ({
+  id,
+  eixo,
+  sinal,
+  usuario: usuario2,
+  candidato
+});
+var PERGUNTAS = [
+  q("q01", "economia", 1, "Voc\xEA \xE9 a favor da reforma da previd\xEAncia?", "O candidato \xE9 a favor da reforma da previd\xEAncia?"),
+  q(
+    "q02",
+    "economia",
+    1,
+    "Voc\xEA \xE9 a favor de uma reforma administrativa (mudar regras de estabilidade e carreira do funcionalismo)?",
+    "O candidato \xE9 a favor de uma reforma administrativa (mudar regras de estabilidade e carreira do funcionalismo)?"
+  ),
+  q("q03", "economia", 1, "O governo deveria privatizar mais empresas estatais?", "O candidato defende privatizar mais empresas estatais?"),
+  q(
+    "q04",
+    "economia",
+    -1,
+    "O governo deveria aumentar impostos para ampliar programas sociais?",
+    "O candidato defende aumentar impostos para ampliar programas sociais?"
+  ),
+  q(
+    "q05",
+    "economia",
+    1,
+    "O governo deveria seguir regras fiscais r\xEDgidas, mesmo que isso limite investimentos?",
+    "O candidato defende regras fiscais r\xEDgidas, mesmo que limitem investimentos?"
+  ),
+  q(
+    "q06",
+    "economia",
+    -1,
+    "O sal\xE1rio m\xEDnimo deveria ter aumento real, acima da infla\xE7\xE3o, garantido por lei?",
+    "O candidato defende aumento real do sal\xE1rio m\xEDnimo garantido por lei?"
+  ),
+  q("q07", "costumes", -1, "Voc\xEA \xE9 a favor da legaliza\xE7\xE3o do aborto?", "O candidato \xE9 a favor da legaliza\xE7\xE3o do aborto?"),
+  q("q08", "costumes", -1, "Voc\xEA \xE9 a favor da legaliza\xE7\xE3o da maconha?", "O candidato \xE9 a favor da legaliza\xE7\xE3o da maconha?"),
+  q(
+    "q09",
+    "costumes",
+    -1,
+    "As escolas devem abordar identidade de g\xEAnero e diversidade sexual?",
+    "O candidato defende que as escolas abordem identidade de g\xEAnero e diversidade sexual?"
+  ),
+  q(
+    "q10",
+    "costumes",
+    -1,
+    "Voc\xEA \xE9 a favor do casamento civil entre pessoas do mesmo sexo?",
+    "O candidato \xE9 a favor do casamento civil entre pessoas do mesmo sexo?"
+  ),
+  q(
+    "q11",
+    "costumes",
+    1,
+    "A religi\xE3o deveria ter mais influ\xEAncia nas decis\xF5es pol\xEDticas?",
+    "O candidato defende maior influ\xEAncia da religi\xE3o nas decis\xF5es pol\xEDticas?"
+  ),
+  q(
+    "q12",
+    "costumes",
+    -1,
+    "Voc\xEA \xE9 a favor de cotas raciais em universidades e concursos p\xFAblicos?",
+    "O candidato \xE9 a favor de cotas raciais em universidades e concursos p\xFAblicos?"
+  ),
+  q("q13", "seguranca", 1, "Voc\xEA \xE9 a favor da redu\xE7\xE3o da maioridade penal?", "O candidato \xE9 a favor da redu\xE7\xE3o da maioridade penal?"),
+  q(
+    "q14",
+    "seguranca",
+    1,
+    "Voc\xEA \xE9 a favor de ampliar o acesso da popula\xE7\xE3o a armas de fogo?",
+    "O candidato \xE9 a favor de ampliar o acesso da popula\xE7\xE3o a armas de fogo?"
+  ),
+  q(
+    "q15",
+    "seguranca",
+    1,
+    "Voc\xEA \xE9 a favor de endurecer as penas para crimes violentos?",
+    "O candidato \xE9 a favor de endurecer as penas para crimes violentos?"
+  ),
+  q(
+    "q16",
+    "seguranca",
+    1,
+    "Policiais deveriam ter mais prote\xE7\xE3o jur\xEDdica em opera\xE7\xF5es (ampliar o excludente de ilicitude)?",
+    "O candidato defende mais prote\xE7\xE3o jur\xEDdica para policiais em opera\xE7\xF5es (ampliar o excludente de ilicitude)?"
+  ),
+  q(
+    "q17",
+    "seguranca",
+    -1,
+    "Voc\xEA \xE9 a favor das audi\xEAncias de cust\xF3dia e das penas alternativas \xE0 pris\xE3o?",
+    "O candidato \xE9 a favor das audi\xEAncias de cust\xF3dia e das penas alternativas \xE0 pris\xE3o?"
+  ),
+  q(
+    "q18",
+    "seguranca",
+    1,
+    "Fac\xE7\xF5es criminosas devem ser classificadas como organiza\xE7\xF5es terroristas?",
+    "O candidato defende classificar fac\xE7\xF5es criminosas como organiza\xE7\xF5es terroristas?"
+  ),
+  q("q19", "instituicoes", 1, "Voc\xEA acha que o STF tem poder demais?", "O candidato afirma que o STF tem poder demais?"),
+  q(
+    "q20",
+    "instituicoes",
+    1,
+    "Voc\xEA \xE9 a favor de limitar decis\xF5es individuais (monocr\xE1ticas) de ministros do STF?",
+    "O candidato \xE9 a favor de limitar decis\xF5es individuais (monocr\xE1ticas) de ministros do STF?"
+  ),
+  q(
+    "q21",
+    "instituicoes",
+    1,
+    "Voc\xEA \xE9 a favor de mandato com prazo fixo para ministros do STF?",
+    "O candidato \xE9 a favor de mandato com prazo fixo para ministros do STF?"
+  ),
+  q("q22", "instituicoes", 1, "Voc\xEA \xE9 a favor do voto impresso audit\xE1vel?", "O candidato \xE9 a favor do voto impresso audit\xE1vel?"),
+  q(
+    "q23",
+    "instituicoes",
+    -1,
+    "As plataformas digitais deveriam ser responsabilizadas pelo conte\xFAdo publicado por usu\xE1rios?",
+    "O candidato defende responsabilizar as plataformas digitais pelo conte\xFAdo publicado por usu\xE1rios?"
+  ),
+  q(
+    "q24",
+    "instituicoes",
+    1,
+    "O Congresso deveria poder anular decis\xF5es do STF?",
+    "O candidato defende que o Congresso possa anular decis\xF5es do STF?"
+  ),
+  q("q25", "alinhamento", -1, "Voc\xEA apoia o governo Lula?", "O candidato apoia o governo Lula? (cite o que defende do governo)"),
+  q(
+    "q26",
+    "alinhamento",
+    1,
+    "Voc\xEA defende as pautas da fam\xEDlia Bolsonaro?",
+    "O candidato defende pautas ou a\xE7\xF5es da fam\xEDlia Bolsonaro? (cite o que defende)"
+  ),
+  q(
+    "q27",
+    "alinhamento",
+    1,
+    "Voc\xEA \xE9 a favor da anistia aos condenados pelos atos de 8 de janeiro?",
+    "O candidato \xE9 a favor da anistia aos condenados pelos atos de 8 de janeiro?"
+  ),
+  q("q28", "alinhamento", -1, "Voc\xEA aprova a pol\xEDtica externa do atual governo?", "O candidato aprova a pol\xEDtica externa do atual governo?"),
+  q(
+    "q29",
+    "alinhamento",
+    1,
+    "Voc\xEA \xE9 a favor de que Jair Bolsonaro possa voltar a disputar elei\xE7\xF5es?",
+    "O candidato \xE9 a favor de que Jair Bolsonaro possa voltar a disputar elei\xE7\xF5es?"
+  ),
+  q(
+    "q30",
+    "alinhamento",
+    1,
+    "O Brasil deveria se aproximar mais dos EUA do que do bloco BRICS?",
+    "O candidato defende que o Brasil se aproxime mais dos EUA do que do bloco BRICS?"
+  )
+];
+var PERGUNTAS_POR_ID = Object.fromEntries(PERGUNTAS.map((p) => [p.id, p]));
+
+// src/lib/scoring.ts
+var MIN_COMPARADAS = 1;
+function compatibilidade(quiz, alvo, polemicas = []) {
+  let pesoTotalUsuario = 0;
+  let pesoOk = 0;
+  let comparadas = 0;
+  let respondidas = 0;
+  const conflitos = [];
+  for (const p of PERGUNTAS) {
+    const u = quiz.respostas[p.id];
+    if (!u || u.r === "pular") continue;
+    respondidas++;
+    const peso = u.imp ? 3 : 1;
+    pesoTotalUsuario += peso;
+    const a = alvo[p.id];
+    if (!a || a.resposta === "sem_info") continue;
+    comparadas++;
+    if (u.r === a.resposta) pesoOk += peso;
+    else if (u.imp) conflitos.push({ id: p.id, motivo: `Diverge em algo inegoci\xE1vel: ${p.usuario}` });
+  }
+  if (quiz.eticaEliminatoria && polemicas.some((x) => x.status === "condenado" && x.categoria === "corrupcao")) {
+    conflitos.push({ id: "etica", motivo: "Tem condena\xE7\xE3o por corrup\xE7\xE3o registrada" });
+  }
+  const minimo = MIN_COMPARADAS;
+  return {
+    pct: comparadas >= minimo ? Math.round(100 * pesoOk / pesoTotalUsuario) : null,
+    comparadas,
+    respondidas,
+    minimo,
+    conflitos
+  };
+}
+
 // server/app.ts
 var PORT = Number(process.env.PORT ?? 4310);
 var PUBLIC_URL2 = process.env.PUBLIC_URL ?? `http://localhost:${PORT}`;
@@ -356,14 +557,76 @@ function lerCandidato(body) {
   const partyId = body.partyId == null ? null : Number(body.partyId);
   return { nome: texto(body.nome, "Nome"), cargo, uf, partyId, foto: opcional(body.foto) };
 }
-async function listarTudo(userId) {
+async function quizDoUsuario(userId) {
+  const q2 = await get("SELECT dados FROM quiz WHERE user_id = ?", [userId]);
+  return q2 ? JSON.parse(q2.dados) : EMPTY_QUIZ;
+}
+async function listarTudoCompleto(userId) {
   const parties = await all("SELECT id, sigla, nome, logo FROM parties ORDER BY sigla");
   const candidates = await all("SELECT id, nome, cargo, uf, party_id AS partyId, foto FROM candidates ORDER BY nome");
   const research = (await all(
     "SELECT id, tipo, entidade_id AS entidadeId, criado_em AS criadoEm, ativa, dados FROM research ORDER BY id DESC"
   )).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
-  const q = await get("SELECT dados FROM quiz WHERE user_id = ?", [userId]);
-  return { parties, candidates, research, quiz: q ? JSON.parse(q.dados) : EMPTY_QUIZ };
+  return { parties, candidates, research, quiz: await quizDoUsuario(userId) };
+}
+async function listarBootstrap(userId) {
+  const parties = await all(
+    `SELECT p.id, p.sigla, p.nome, p.logo, (SELECT COUNT(*) FROM candidates c WHERE c.party_id = p.id) AS candidatosCount
+     FROM parties p ORDER BY p.sigla`
+  );
+  const researchPartidos = (await all(
+    `SELECT id, tipo, entidade_id AS entidadeId, criado_em AS criadoEm, ativa, dados
+       FROM research WHERE tipo = 'partido' ORDER BY id DESC`
+  )).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
+  return { parties, researchPartidos, quiz: await quizDoUsuario(userId) };
+}
+var chaveGrupo = (cargo, uf) => `${cargo}:${uf}`;
+function montarItensRankeados(linhas, quiz) {
+  const itens = linhas.map((l) => {
+    const dados = l.pesquisaDados ? JSON.parse(l.pesquisaDados) : null;
+    const compat = dados ? compatibilidade(quiz, dados.quiz, dados.polemicas) : null;
+    return {
+      cand: { id: l.id, nome: l.nome, cargo: l.cargo, uf: l.uf, partyId: l.partyId, foto: l.foto },
+      pesquisa: l.pesquisaId != null ? { id: l.pesquisaId, tipo: "candidato", entidadeId: l.id, criadoEm: l.pesquisaCriadoEm, ativa: l.pesquisaAtiva === 1, dados } : void 0,
+      compat,
+      conflito: !!compat && compat.conflitos.length > 0,
+      rank: null,
+      totalGrupo: 0
+    };
+  });
+  const grupos = /* @__PURE__ */ new Map();
+  for (const it of itens) {
+    if (it.compat?.pct == null || it.conflito) continue;
+    const k = chaveGrupo(it.cand.cargo, it.cand.uf);
+    grupos.set(k, [...grupos.get(k) ?? [], it]);
+  }
+  for (const membros of grupos.values()) {
+    membros.sort((a, b) => b.compat.pct - a.compat.pct || a.cand.nome.localeCompare(b.cand.nome));
+    membros.forEach((m, i) => {
+      m.rank = i + 1;
+      m.totalGrupo = membros.length;
+    });
+  }
+  return itens;
+}
+function ordenarItens(itens, ordem) {
+  if (ordem === "nome") return [...itens].sort((a, b) => a.cand.nome.localeCompare(b.cand.nome));
+  const peso = (i) => i.conflito ? 2 : i.compat?.pct != null ? 0 : 1;
+  return [...itens].sort((a, b) => peso(a) - peso(b) || (b.compat?.pct ?? 0) - (a.compat?.pct ?? 0) || a.cand.nome.localeCompare(b.cand.nome));
+}
+async function linhasGrupo(cargo, uf) {
+  return all(
+    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
+            r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
+     FROM candidates c
+     LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+     WHERE c.cargo = ? AND c.uf = ?`,
+    [cargo, uf]
+  );
+}
+var cacheOpcoesColinha = /* @__PURE__ */ new Map();
+function invalidarCacheColinha() {
+  cacheOpcoesColinha.clear();
 }
 var api = express.Router();
 api.post("/auth/register", async (req, res) => {
@@ -402,6 +665,48 @@ api.post("/auth/login", async (req, res) => {
   if (!u || !conferirSenha(senha, u.password_hash)) throw new HttpError(401, "Usu\xE1rio/email ou senha incorretos");
   await criarSessao(res, u.id);
   res.json({ id: u.id, username: u.username, email: u.email, isAdmin: u.isAdmin === 1 });
+});
+api.post("/auth/google", async (req, res) => {
+  const accessToken = texto(req.body.accessToken, "accessToken");
+  const clientId = process.env.VITE_GOOGLE_CLIENT_ID;
+  if (!clientId) throw new HttpError(500, "Login com Google n\xE3o est\xE1 configurado");
+  const r = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!r.ok) throw new HttpError(401, "Token do Google inv\xE1lido ou expirado");
+  const payload = await r.json();
+  if (!payload.email || !payload.email_verified) throw new HttpError(401, "Email do Google n\xE3o verificado");
+  const email = payload.email.toLowerCase();
+  const existente = await get(
+    "SELECT id, username, email, is_admin AS isAdmin FROM users WHERE email = ?",
+    [email]
+  );
+  let usuarioFinal;
+  if (existente) {
+    usuarioFinal = existente;
+  } else {
+    const { n } = await get("SELECT COUNT(*) AS n FROM users");
+    const isAdmin = n === 0;
+    const base = email.split("@")[0].replace(/[^a-z0-9._-]/gi, "").toLowerCase() || "usuario";
+    let username = base;
+    let sufixo = 1;
+    while (await get("SELECT id FROM users WHERE username = ?", [username])) {
+      username = `${base}${++sufixo}`;
+    }
+    const senhaAleatoria = hashSenha(crypto2.randomBytes(32).toString("hex"));
+    const novo = await run("INSERT INTO users (username, email, password_hash, is_admin, criado_em) VALUES (?, ?, ?, ?, ?)", [
+      username,
+      email,
+      senhaAleatoria,
+      isAdmin ? 1 : 0,
+      (/* @__PURE__ */ new Date()).toISOString()
+    ]);
+    const userId = Number(novo.lastInsertRowid);
+    if (isAdmin && quizLegado) await run("INSERT INTO quiz (user_id, dados) VALUES (?, ?)", [userId, quizLegado]);
+    usuarioFinal = { id: userId, username, email, isAdmin: isAdmin ? 1 : 0 };
+  }
+  await criarSessao(res, usuarioFinal.id);
+  res.json({ id: usuarioFinal.id, username: usuarioFinal.username, email: usuarioFinal.email, isAdmin: usuarioFinal.isAdmin === 1 });
 });
 api.post("/auth/logout", async (req, res) => {
   await encerrarSessao(req, res);
@@ -508,7 +813,205 @@ api.get("/feedback", exigirAdmin, async (_req, res) => {
   res.json(lista);
 });
 api.get("/data", async (req, res) => {
-  res.json(await listarTudo(usuario(req).userId));
+  res.json(await listarBootstrap(usuario(req).userId));
+});
+api.get("/contagens", exigirAdmin, async (_req, res) => {
+  const candidatos = (await get("SELECT COUNT(*) AS n FROM candidates")).n;
+  const pesquisas = (await get("SELECT COUNT(*) AS n FROM research")).n;
+  res.json({ candidatos, pesquisas });
+});
+var LIMITE_CALCULO_COMPLETO = 1500;
+api.get("/candidatos", async (req, res) => {
+  const { cargo, uf, partido, busca, ordem, top3 } = req.query;
+  const condicoes = [];
+  const args = [];
+  if (typeof cargo === "string" && cargo) {
+    condicoes.push("c.cargo = ?");
+    args.push(cargo);
+  }
+  if (typeof uf === "string" && uf) {
+    condicoes.push("c.uf = ?");
+    args.push(uf);
+  }
+  if (typeof partido === "string" && partido) {
+    condicoes.push("c.party_id = ?");
+    args.push(Number(partido));
+  }
+  if (typeof busca === "string" && busca.trim()) {
+    condicoes.push("LOWER(c.nome) LIKE ?");
+    args.push(`%${busca.trim().toLowerCase()}%`);
+  }
+  const where = condicoes.length ? `WHERE ${condicoes.join(" AND ")}` : "";
+  const quiz = await quizDoUsuario(usuario(req).userId);
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const limitParam = req.query.limit;
+  const partiesRows = await all("SELECT id, sigla, nome, logo FROM parties");
+  const partidosPorId = new Map(partiesRows.map((p) => [p.id, p]));
+  const montarLeve = (it) => ({
+    cand: it.cand,
+    party: it.cand.partyId != null ? partidosPorId.get(it.cand.partyId) : void 0,
+    compat: it.compat,
+    conflito: it.conflito,
+    rank: it.rank,
+    totalGrupo: it.totalGrupo,
+    temPesquisa: !!it.pesquisa,
+    numeroUrna: it.pesquisa?.dados.basico.numero_urna ?? null,
+    situacao: it.pesquisa?.dados.basico.situacao ?? null
+  });
+  const { n: totalFiltrado } = await get(`SELECT COUNT(*) AS n FROM candidates c ${where}`, args);
+  if (totalFiltrado > LIMITE_CALCULO_COMPLETO) {
+    const linhasPagina = await all(
+      `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto FROM candidates c ${where} ORDER BY c.nome LIMIT ? OFFSET ?`,
+      [...args, Number(limitParam) || LIMITE_CALCULO_COMPLETO, offset]
+    );
+    const ids = linhasPagina.map((l) => l.id);
+    const pesquisas = ids.length ? await all(
+      `SELECT entidade_id AS entidadeId, id, criado_em AS criadoEm, ativa, dados FROM research
+           WHERE tipo = 'candidato' AND ativa = 1 AND entidade_id IN (${ids.map(() => "?").join(",")})`,
+      ids
+    ) : [];
+    const pesquisaPorCandidato = new Map(pesquisas.map((p) => [p.entidadeId, p]));
+    const leve = linhasPagina.map((l) => {
+      const p = pesquisaPorCandidato.get(l.id);
+      const dados = p ? JSON.parse(p.dados) : null;
+      const compat = dados ? compatibilidade(quiz, dados.quiz, dados.polemicas) : null;
+      return {
+        cand: { id: l.id, nome: l.nome, cargo: l.cargo, uf: l.uf, partyId: l.partyId, foto: l.foto },
+        party: l.partyId != null ? partidosPorId.get(l.partyId) : void 0,
+        compat,
+        conflito: !!compat && compat.conflitos.length > 0,
+        rank: null,
+        totalGrupo: 0,
+        temPesquisa: !!p,
+        numeroUrna: dados?.basico.numero_urna ?? null,
+        situacao: dados?.basico.situacao ?? null
+      };
+    });
+    res.json({ total: totalFiltrado, itens: leve });
+    return;
+  }
+  const linhas = await all(
+    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
+            r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
+     FROM candidates c
+     LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+     ${where}`,
+    args
+  );
+  let itens = montarItensRankeados(linhas, quiz);
+  if (top3 === "1" || top3 === "true") itens = itens.filter((i) => i.rank != null && i.rank <= 3);
+  itens = ordenarItens(itens, typeof ordem === "string" ? ordem : "compat");
+  const total = itens.length;
+  const pagina = typeof limitParam === "string" && limitParam ? itens.slice(offset, offset + Number(limitParam)) : itens;
+  res.json({ total, itens: pagina.map(montarLeve) });
+});
+api.get("/candidatos/:id", async (req, res) => {
+  const id = idParam(req);
+  const cand = await get("SELECT cargo, uf FROM candidates WHERE id = ?", [id]);
+  if (!cand) throw new HttpError(404, "Candidato n\xE3o encontrado");
+  const linhas = await linhasGrupo(cand.cargo, cand.uf);
+  const quiz = await quizDoUsuario(usuario(req).userId);
+  const itens = montarItensRankeados(linhas, quiz);
+  const it = itens.find((i) => i.cand.id === id);
+  if (!it) throw new HttpError(404, "Candidato n\xE3o encontrado");
+  const party = it.cand.partyId != null ? await get("SELECT id, sigla, nome, logo FROM parties WHERE id = ?", [it.cand.partyId]) : void 0;
+  res.json({ ...it, party });
+});
+api.get("/colinha-opcoes", async (req, res) => {
+  const { cargo, uf } = req.query;
+  const chave = `${typeof cargo === "string" ? cargo : ""}:${typeof uf === "string" ? uf : ""}`;
+  const emCache = cacheOpcoesColinha.get(chave);
+  if (emCache) {
+    res.json(emCache);
+    return;
+  }
+  const condicoes = [];
+  const args = [];
+  if (typeof cargo === "string" && cargo) {
+    condicoes.push("c.cargo = ?");
+    args.push(cargo);
+  }
+  if (typeof uf === "string" && uf) {
+    condicoes.push("c.uf = ?");
+    args.push(uf);
+  }
+  const where = condicoes.length ? `WHERE ${condicoes.join(" AND ")}` : "";
+  const linhas = await all(
+    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto, r.dados AS dados
+     FROM candidates c
+     LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+     ${where}
+     ORDER BY c.nome`,
+    args
+  );
+  const opcoes = linhas.map((l) => ({
+    id: l.id,
+    nome: l.nome,
+    cargo: l.cargo,
+    uf: l.uf,
+    partyId: l.partyId,
+    foto: l.foto,
+    numeroUrna: l.dados ? JSON.parse(l.dados).basico?.numero_urna ?? null : null
+  }));
+  cacheOpcoesColinha.set(chave, opcoes);
+  res.json(opcoes);
+});
+api.get("/colinha-melhores", async (req, res) => {
+  const uf = typeof req.query.uf === "string" ? req.query.uf : "";
+  if (!uf) throw new HttpError(400, "uf \xE9 obrigat\xF3rio");
+  const quiz = await quizDoUsuario(usuario(req).userId);
+  const linhasComum = (where, args) => all(
+    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
+              r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
+       FROM candidates c
+       LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+       ${where}`,
+    args
+  );
+  const [linhasUf, linhasPresidente] = await Promise.all([
+    linhasComum("WHERE c.uf = ? AND c.cargo != 'presidente'", [uf]),
+    linhasComum("WHERE c.cargo = 'presidente'", [])
+  ]);
+  const itensUf = montarItensRankeados(linhasUf, quiz);
+  const itensPresidente = montarItensRankeados(linhasPresidente, quiz);
+  const melhoresDoCargo = (itens, cargo, quantos) => {
+    const validos = itens.filter((i) => i.cand.cargo === cargo && i.compat?.pct != null && !i.conflito);
+    validos.sort((a, b) => b.compat.pct - a.compat.pct);
+    return validos.slice(0, quantos).map((i) => ({ id: i.cand.id, pct: i.compat.pct }));
+  };
+  res.json({
+    presidente: melhoresDoCargo(itensPresidente, "presidente", 1),
+    governador: melhoresDoCargo(itensUf, "governador", 1),
+    senador: melhoresDoCargo(itensUf, "senador", 2),
+    deputado_federal: melhoresDoCargo(itensUf, "deputado_federal", 1),
+    deputado_estadual: melhoresDoCargo(itensUf, "deputado_estadual", 1)
+  });
+});
+api.get("/candidato-compat/:id", async (req, res) => {
+  const id = idParam(req);
+  const pesquisa = await get(
+    "SELECT dados FROM research WHERE tipo = 'candidato' AND entidade_id = ? AND ativa = 1",
+    [id]
+  );
+  if (!pesquisa) {
+    res.json({ pct: null });
+    return;
+  }
+  const dados = JSON.parse(pesquisa.dados);
+  const quiz = await quizDoUsuario(usuario(req).userId);
+  const compat = compatibilidade(quiz, dados.quiz, dados.polemicas);
+  res.json({ pct: compat.pct });
+});
+api.get("/research", async (req, res) => {
+  const { tipo, entidadeId } = req.query;
+  if (tipo !== "candidato" && tipo !== "partido") throw new HttpError(400, "Tipo inv\xE1lido");
+  const id = Number(entidadeId);
+  if (!Number.isInteger(id)) throw new HttpError(400, "entidadeId inv\xE1lido");
+  const lista = (await all(
+    "SELECT id, tipo, entidade_id AS entidadeId, criado_em AS criadoEm, ativa, dados FROM research WHERE tipo = ? AND entidade_id = ? ORDER BY id DESC",
+    [tipo, id]
+  )).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
+  res.json(lista);
 });
 api.post("/parties", exigirAdmin, async (req, res) => {
   const sigla = texto(req.body.sigla, "Sigla").toUpperCase();
@@ -553,6 +1056,7 @@ api.post("/candidates", exigirAdmin, async (req, res) => {
     c.partyId,
     c.foto
   ]);
+  invalidarCacheColinha();
   res.json({ id: Number(r.lastInsertRowid) });
 });
 api.put("/candidates/:id", exigirAdmin, async (req, res) => {
@@ -565,6 +1069,7 @@ api.put("/candidates/:id", exigirAdmin, async (req, res) => {
     c.foto,
     idParam(req)
   ]);
+  invalidarCacheColinha();
   res.json({ ok: true });
 });
 api.delete("/candidates/:id", exigirAdmin, async (req, res) => {
@@ -573,6 +1078,7 @@ api.delete("/candidates/:id", exigirAdmin, async (req, res) => {
     await t.run("DELETE FROM research WHERE tipo = 'candidato' AND entidade_id = ?", [id]);
     await t.run("DELETE FROM candidates WHERE id = ?", [id]);
   });
+  invalidarCacheColinha();
   res.json({ ok: true });
 });
 api.post("/research", exigirAdmin, async (req, res) => {
@@ -592,6 +1098,7 @@ api.post("/research", exigirAdmin, async (req, res) => {
     ]);
     return Number(r.lastInsertRowid);
   });
+  if (tipo === "candidato") invalidarCacheColinha();
   res.json({ id });
 });
 api.post("/research/:id/activate", exigirAdmin, async (req, res) => {
@@ -602,6 +1109,7 @@ api.post("/research/:id/activate", exigirAdmin, async (req, res) => {
     await t.run("UPDATE research SET ativa = 0 WHERE tipo = ? AND entidade_id = ?", [r.tipo, r.entidadeId]);
     await t.run("UPDATE research SET ativa = 1 WHERE id = ?", [id]);
   });
+  if (r.tipo === "candidato") invalidarCacheColinha();
   res.json({ ok: true });
 });
 api.delete("/research/:id", exigirAdmin, async (req, res) => {
@@ -622,6 +1130,7 @@ api.delete("/research/:id", exigirAdmin, async (req, res) => {
       );
     }
   });
+  if (r.tipo === "candidato") invalidarCacheColinha();
   res.json({ ok: true });
 });
 api.put("/quiz", async (req, res) => {
@@ -654,7 +1163,7 @@ api.put("/colinha", async (req, res) => {
   res.json({ token });
 });
 api.get("/export", exigirAdmin, async (req, res) => {
-  const tudo = await listarTudo(usuario(req).userId);
+  const tudo = await listarTudoCompleto(usuario(req).userId);
   res.setHeader("Content-Disposition", `attachment; filename="capivara-politica-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json"`);
   res.json({ versao: 1, ...tudo });
 });
@@ -694,6 +1203,7 @@ api.post("/import", exigirAdmin, async (req, res) => {
     await t.run("DELETE FROM quiz WHERE user_id = ?", [userId]);
     await t.run("INSERT INTO quiz (user_id, dados) VALUES (?, ?)", [userId, JSON.stringify(b.quiz ?? EMPTY_QUIZ)]);
   });
+  invalidarCacheColinha();
   res.json({ ok: true });
 });
 var app = express();

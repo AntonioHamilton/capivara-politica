@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CandidateForm } from '../components/Forms.tsx';
-import { Avatar, Icon, PartyBadge } from '../components/ui.tsx';
-import { useItens } from '../lib/ranking.ts';
-import type { Item } from '../lib/ranking.ts';
+import { Avatar, Icon, Loading, PartyBadge } from '../components/ui.tsx';
+import { api } from '../lib/api.ts';
+import type { ItemCandidatoLista } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { totalRespondidas } from '../lib/scoring.ts';
 import { useStore } from '../lib/store.tsx';
@@ -11,33 +11,107 @@ import { CARGOS, UFS } from '../lib/types.ts';
 
 type Ordem = 'compat' | 'nome';
 
-function ordemCompat(a: Item, b: Item): number {
-  const peso = (i: Item) => (i.conflito ? 2 : i.compat?.pct != null ? 0 : 1);
-  return peso(a) - peso(b) || (b.compat?.pct ?? 0) - (a.compat?.pct ?? 0) || a.cand.nome.localeCompare(b.cand.nome);
-}
+const TAMANHO_PAGINA = 50;
+// altura aproximada de cada linha (com a folga do gap) — usada só pra decidir o que renderizar,
+// uma pequena imprecisão aqui não quebra nada, só ajusta a margem de segurança (overscan)
+const ALTURA_SLOT = 96;
+const OVERSCAN = 8;
 
 export function Lista() {
   const { data } = useStore();
   const { user } = useAuth();
-  const itens = useItens();
   const navigate = useNavigate();
   const [adicionando, setAdicionando] = useState(false);
   const [cargo, setCargo] = useState('');
   const [uf, setUf] = useState('');
   const [partido, setPartido] = useState('');
+  const [buscaCampo, setBuscaCampo] = useState('');
   const [busca, setBusca] = useState('');
   const [ordem, setOrdem] = useState<Ordem>('compat');
   const [top3, setTop3] = useState(false);
 
-  const visiveis = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    return itens
-      .filter((i) => (!cargo || i.cand.cargo === cargo) && (!uf || i.cand.uf === uf))
-      .filter((i) => !partido || String(i.cand.partyId) === partido)
-      .filter((i) => !q || i.cand.nome.toLowerCase().includes(q))
-      .filter((i) => !top3 || (i.rank != null && i.rank <= 3))
-      .sort(ordem === 'nome' ? (a, b) => a.cand.nome.localeCompare(b.cand.nome) : ordemCompat);
-  }, [itens, cargo, uf, partido, busca, ordem, top3]);
+  const [itens, setItens] = useState<ItemCandidatoLista[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  // carregandoFiltro: troca de filtro/ordem — a lista atual fica desatualizada, então some e dá
+  // lugar ao loading. carregandoMais: rolagem infinita — a lista atual continua certa, só falta
+  // completar, então fica visível e o loading aparece só embaixo.
+  const [carregandoFiltro, setCarregandoFiltro] = useState(true);
+  const [carregandoMais, setCarregandoMais] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const carregandoRef = useRef(false); // evita disparar vários "carregar mais" simultâneos durante o scroll
+  const [scrollTop, setScrollTop] = useState(0);
+  const [alturaViewport, setAlturaViewport] = useState(600);
+
+  // debounça a busca por nome pra não disparar uma requisição a cada tecla
+  useEffect(() => {
+    const t = setTimeout(() => setBusca(buscaCampo), 300);
+    return () => clearTimeout(t);
+  }, [buscaCampo]);
+
+  useEffect(() => {
+    let ativo = true;
+    setCarregandoFiltro(true);
+    setErro(null);
+    api
+      .candidatos({ cargo, uf, partido, busca, ordem, top3, offset: 0, limit: TAMANHO_PAGINA })
+      .then((r) => {
+        if (!ativo) return;
+        setItens(r.itens);
+        setTotal(r.total);
+        scrollRef.current?.scrollTo(0, 0);
+        setScrollTop(0);
+      })
+      .catch((e: Error) => ativo && setErro(e.message))
+      .finally(() => ativo && setCarregandoFiltro(false));
+    return () => {
+      ativo = false;
+    };
+  }, [cargo, uf, partido, busca, ordem, top3]);
+
+  const carregarMais = useCallback(async () => {
+    if (carregandoRef.current) return;
+    carregandoRef.current = true;
+    setCarregandoMais(true);
+    try {
+      const r = await api.candidatos({ cargo, uf, partido, busca, ordem, top3, offset: itens.length, limit: TAMANHO_PAGINA });
+      setItens((atual) => [...atual, ...r.itens]);
+      setTotal(r.total);
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setCarregandoMais(false);
+      carregandoRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargo, uf, partido, busca, ordem, top3, itens.length]);
+
+  // mede a altura visível da área de rolagem (pra saber quantas linhas cabem na tela)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const medir = () => setAlturaViewport(el.clientHeight);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // rolagem infinita: perto do fim do que já foi carregado, pede mais automaticamente.
+  // também é aqui que guardamos o scrollTop pra decidir quais linhas renderizar (virtualização).
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setScrollTop(el.scrollTop);
+    const pertoDoFim = el.scrollTop + el.clientHeight >= el.scrollHeight - ALTURA_SLOT * 4;
+    if (pertoDoFim && total != null && itens.length < total) carregarMais();
+  };
+
+  const inicio = Math.max(0, Math.floor(scrollTop / ALTURA_SLOT) - OVERSCAN);
+  const quantidadeVisivel = Math.ceil(alturaViewport / ALTURA_SLOT) + OVERSCAN * 2;
+  const fim = Math.min(itens.length, inicio + quantidadeVisivel);
+  const visiveis = itens.slice(inicio, fim);
 
   const quizIncompleto = totalRespondidas(data.quiz) < 30;
 
@@ -46,9 +120,7 @@ export function Lista() {
       <div className="pagina-topo">
         <div>
           <h1>Candidatos</h1>
-          <p className="muted">
-            {itens.length} na sua lista · {itens.filter((i) => i.pesquisa).length} pesquisados
-          </p>
+          <p className="muted">{!carregandoFiltro && total != null ? `${total} encontrados` : 'Carregando...'}</p>
         </div>
         {user.isAdmin && (
           <button className="btn" onClick={() => setAdicionando(true)}>
@@ -98,7 +170,7 @@ export function Lista() {
         </select>
         <label className="busca">
           <Icon name="search" size={16} />
-          <input placeholder="Pesquisar nome" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <input placeholder="Pesquisar nome" value={buscaCampo} onChange={(e) => setBuscaCampo(e.target.value)} />
         </label>
       </div>
 
@@ -115,9 +187,11 @@ export function Lista() {
         </label>
       </div>
 
-      {itens.length === 0 ? (
-        <p className="vazio">Sua lista está vazia. Adicione os candidatos que você quer analisar.</p>
-      ) : visiveis.length === 0 ? (
+      {erro ? (
+        <p className="vazio">Não foi possível carregar: {erro}</p>
+      ) : carregandoFiltro ? (
+        <Loading texto="Carregando candidatos..." variante="inline" />
+      ) : total === 0 ? (
         <p className="vazio">Nenhum candidato com esses filtros.</p>
       ) : (
         <>
@@ -130,52 +204,60 @@ export function Lista() {
             <span className="col-compat">Compatibilidade</span>
             <span />
           </div>
-          <ul className="lista">
-            {visiveis.map((it, idx) => (
-              <li key={it.cand.id}>
-                <Link to={`/app/candidato/${it.cand.id}`} className="linha-candidato">
-                  <span className="pos">{idx + 1}º</span>
-                  <Avatar src={it.cand.foto} nome={it.cand.nome} size={56} />
-                  <span className="nome">
-                    {it.cand.nome}
-                    <small className="so-mobile">
-                      {CARGOS[it.cand.cargo]} · {it.party?.sigla ?? 'Sem partido'}
-                    </small>
-                  </span>
-                  <span className="col-cargo">{CARGOS[it.cand.cargo]}</span>
-                  <span className="col-partido">
-                    <PartyBadge party={it.party} uf={it.cand.uf} />
-                  </span>
-                  <span className="col-compat">
-                    {it.conflito ? (
-                      <span className="selo-conflito" title={it.compat!.conflitos.map((c) => c.motivo).join('\n')}>
-                        <Icon name="alert" size={14} /> Conflito
-                      </span>
-                    ) : it.compat?.pct != null ? (
-                      <>
-                        <span className="nota">{it.compat.pct}%</span>
-                        <small className="cobertura" title="Perguntas em que você e o candidato têm resposta, entre as que você respondeu">
-                          {it.compat.comparadas} de {it.compat.respondidas} perguntas
+          <div className="lista-scroll" ref={scrollRef} onScroll={onScroll}>
+            <ul className="lista">
+              {inicio > 0 && <li aria-hidden style={{ height: inicio * ALTURA_SLOT }} />}
+              {visiveis.map((it, i) => {
+                const idx = inicio + i;
+                return (
+                  <li key={it.cand.id}>
+                    <Link to={`/app/candidato/${it.cand.id}`} className="linha-candidato">
+                      <span className="pos">{idx + 1}º</span>
+                      <Avatar src={it.cand.foto} nome={it.cand.nome} size={56} />
+                      <span className="nome">
+                        {it.cand.nome}
+                        <small className="so-mobile">
+                          {CARGOS[it.cand.cargo]} · {it.party?.sigla ?? 'Sem partido'}
                         </small>
-                      </>
-                    ) : it.pesquisa ? (
-                      <span
-                        className="selo-neutro"
-                        title={it.compat ? `${it.compat.comparadas} respostas em comum (mínimo ${it.compat.minimo})` : undefined}
-                      >
-                        Dados insuficientes
                       </span>
-                    ) : (
-                      <span className="selo-neutro">Não pesquisado</span>
-                    )}
-                  </span>
-                  <span className="mais">
-                    <Icon name="plus" size={16} />
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                      <span className="col-cargo">{CARGOS[it.cand.cargo]}</span>
+                      <span className="col-partido">
+                        <PartyBadge party={it.party} uf={it.cand.uf} />
+                      </span>
+                      <span className="col-compat">
+                        {it.conflito ? (
+                          <span className="selo-conflito" title={it.compat!.conflitos.map((c) => c.motivo).join('\n')}>
+                            <Icon name="alert" size={14} /> Conflito
+                          </span>
+                        ) : it.compat?.pct != null ? (
+                          <>
+                            <span className="nota">{it.compat.pct}%</span>
+                            <small className="cobertura" title="Perguntas em que você e o candidato têm resposta, entre as que você respondeu">
+                              {it.compat.comparadas} de {it.compat.respondidas} perguntas
+                            </small>
+                          </>
+                        ) : it.temPesquisa ? (
+                          <span
+                            className="selo-neutro"
+                            title={it.compat ? `${it.compat.comparadas} respostas em comum (mínimo ${it.compat.minimo})` : undefined}
+                          >
+                            Dados insuficientes
+                          </span>
+                        ) : (
+                          <span className="selo-neutro">Não pesquisado</span>
+                        )}
+                      </span>
+                      <span className="mais">
+                        <Icon name="plus" size={16} />
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+              {fim < itens.length && <li aria-hidden style={{ height: (itens.length - fim) * ALTURA_SLOT }} />}
+            </ul>
+            {carregandoMais && <Loading texto="Carregando mais..." variante="inline" />}
+          </div>
         </>
       )}
 

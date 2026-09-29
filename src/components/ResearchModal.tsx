@@ -10,9 +10,10 @@ interface Props {
   titulo: string;
   prompt: string;
   onClose: () => void;
+  onSaved?: () => void;
 }
 
-export function ResearchModal({ tipo, entidadeId, titulo, prompt, onClose }: Props) {
+export function ResearchModal({ tipo, entidadeId, titulo, prompt, onClose, onSaved }: Props) {
   const { refresh } = useStore();
   const [texto, setTexto] = useState('');
   const [erros, setErros] = useState<string[]>([]);
@@ -39,7 +40,8 @@ export function ResearchModal({ tipo, entidadeId, titulo, prompt, onClose }: Pro
     setSalvando(true);
     try {
       await api.saveResearch(tipo, entidadeId, r.dados);
-      await refresh();
+      if (tipo === 'partido') await refresh();
+      onSaved?.();
       onClose();
     } catch (e) {
       setErros([(e as Error).message]);

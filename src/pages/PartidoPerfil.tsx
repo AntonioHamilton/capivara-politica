@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PartyForm } from '../components/Forms.tsx';
 import { Posicoes } from '../components/Posicoes.tsx';
@@ -6,27 +6,39 @@ import { ResearchModal } from '../components/ResearchModal.tsx';
 import { Avatar, Fontes, Icon, Tabs } from '../components/ui.tsx';
 import { Versions } from '../components/Versions.tsx';
 import { api } from '../lib/api.ts';
+import type { ItemCandidatoLista } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { dataBR } from '../lib/format.ts';
 import { promptPartido } from '../lib/prompt.ts';
-import { useItens, usePartidos } from '../lib/ranking.ts';
+import { usePartidos } from '../lib/ranking.ts';
 import { useStore } from '../lib/store.tsx';
 import { CARGOS, ufLabel } from '../lib/types.ts';
 
 type Aba = 'posicoes' | 'candidatos' | 'pesquisas';
+const LIMITE_CANDIDATOS = 200;
 
 export function PartidoPerfil() {
   const { id } = useParams();
   const { data, refresh } = useStore();
   const { user } = useAuth();
   const partidos = usePartidos();
-  const itens = useItens();
   const navigate = useNavigate();
   const [aba, setAba] = useState<Aba>('posicoes');
   const [pesquisando, setPesquisando] = useState(false);
   const [editando, setEditando] = useState(false);
+  const [candidatos, setCandidatos] = useState<ItemCandidatoLista[]>([]);
+  const [totalCandidatos, setTotalCandidatos] = useState<number | null>(null);
 
   const item = partidos.find((p) => String(p.party.id) === id);
+
+  useEffect(() => {
+    if (!item) return;
+    api.candidatos({ partido: String(item.party.id), ordem: 'compat', limit: LIMITE_CANDIDATOS }).then((r) => {
+      setCandidatos(r.itens);
+      setTotalCandidatos(r.total);
+    });
+  }, [item?.party.id]);
+
   if (!item) {
     return (
       <div className="pagina">
@@ -40,7 +52,6 @@ export function PartidoPerfil() {
 
   const { party, pesquisa, compat } = item;
   const d = pesquisa?.dados;
-  const candidatos = itens.filter((i) => i.cand.partyId === party.id);
 
   const remover = async () => {
     if (!window.confirm(`Remover o partido ${party.sigla}? As pesquisas salvas dele também serão apagadas.`)) return;
@@ -123,27 +134,34 @@ export function PartidoPerfil() {
 
       {aba === 'candidatos' &&
         (candidatos.length ? (
-          <ul className="lista">
-            {candidatos.map((i) => (
-              <li key={i.cand.id}>
-                <Link to={`/app/candidato/${i.cand.id}`} className="linha-candidato simples">
-                  <Avatar src={i.cand.foto} nome={i.cand.nome} size={48} />
-                  <span className="nome">{i.cand.nome}</span>
-                  <span className="col-cargo">
-                    {CARGOS[i.cand.cargo]} · {ufLabel(i.cand.uf)}
-                  </span>
-                  <span className="col-compat">
-                    {i.compat?.pct != null ? <span className="nota">{i.compat.pct}%</span> : <span className="selo-neutro">Sem nota</span>}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="lista">
+              {candidatos.map((i) => (
+                <li key={i.cand.id}>
+                  <Link to={`/app/candidato/${i.cand.id}`} className="linha-candidato simples">
+                    <Avatar src={i.cand.foto} nome={i.cand.nome} size={48} />
+                    <span className="nome">{i.cand.nome}</span>
+                    <span className="col-cargo">
+                      {CARGOS[i.cand.cargo]} · {ufLabel(i.cand.uf)}
+                    </span>
+                    <span className="col-compat">
+                      {i.compat?.pct != null ? <span className="nota">{i.compat.pct}%</span> : <span className="selo-neutro">Sem nota</span>}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            {totalCandidatos != null && totalCandidatos > candidatos.length && (
+              <p className="muted pequeno-texto">
+                Mostrando {candidatos.length} de {totalCandidatos} candidatos deste partido.
+              </p>
+            )}
+          </>
         ) : (
-          <p className="vazio">Nenhum candidato deste partido na sua lista.</p>
+          <p className="vazio">Nenhum candidato deste partido.</p>
         ))}
 
-      {aba === 'pesquisas' && <Versions tipo="partido" entidadeId={party.id} />}
+      {aba === 'pesquisas' && <Versions tipo="partido" entidadeId={party.id} onChange={refresh} />}
 
       {user.isAdmin && pesquisando && (
         <ResearchModal

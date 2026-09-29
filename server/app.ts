@@ -20,6 +20,8 @@ import {
   validarTokenReset,
 } from './auth.ts';
 import { emailRecuperacaoHtml, enviarEmail } from './email.ts';
+import { compatibilidade } from '../src/lib/scoring.ts';
+import type { QuizState } from '../src/lib/types.ts';
 
 const PORT = Number(process.env.PORT ?? 4310);
 const PUBLIC_URL = process.env.PUBLIC_URL ?? `http://localhost:${PORT}`;
@@ -56,7 +58,14 @@ function lerCandidato(body: Record<string, unknown>) {
   return { nome: texto(body.nome, 'Nome'), cargo, uf, partyId, foto: opcional(body.foto) };
 }
 
-async function listarTudo(userId: number) {
+async function quizDoUsuario(userId: number): Promise<QuizState> {
+  const q = await get<{ dados: string }>('SELECT dados FROM quiz WHERE user_id = ?', [userId]);
+  return q ? JSON.parse(q.dados) : EMPTY_QUIZ;
+}
+
+// versão completa (só para backup/restore em /export e /import — nunca para o bootstrap do app,
+// que não pode carregar os ~20 mil candidatos e pesquisas de uma vez)
+async function listarTudoCompleto(userId: number) {
   const parties = await all<Record<string, unknown>>('SELECT id, sigla, nome, logo FROM parties ORDER BY sigla');
   const candidates = await all<Record<string, unknown>>('SELECT id, nome, cargo, uf, party_id AS partyId, foto FROM candidates ORDER BY nome');
   const research = (
@@ -64,8 +73,112 @@ async function listarTudo(userId: number) {
       'SELECT id, tipo, entidade_id AS entidadeId, criado_em AS criadoEm, ativa, dados FROM research ORDER BY id DESC',
     )
   ).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
-  const q = await get<{ dados: string }>('SELECT dados FROM quiz WHERE user_id = ?', [userId]);
-  return { parties, candidates, research, quiz: q ? JSON.parse(q.dados) : EMPTY_QUIZ };
+  return { parties, candidates, research, quiz: await quizDoUsuario(userId) };
+}
+
+// versão leve usada no login/bootstrap do app: partidos (com contagem de candidatos),
+// pesquisas de partido (poucas dezenas) e o quiz do usuário — nada de candidatos/pesquisas
+// de candidato, que hoje somam ~20 mil linhas e são pedidos sob demanda pelas rotas abaixo.
+async function listarBootstrap(userId: number) {
+  const parties = await all<Record<string, unknown>>(
+    `SELECT p.id, p.sigla, p.nome, p.logo, (SELECT COUNT(*) FROM candidates c WHERE c.party_id = p.id) AS candidatosCount
+     FROM parties p ORDER BY p.sigla`,
+  );
+  const researchPartidos = (
+    await all<{ ativa: number; dados: string }>(
+      `SELECT id, tipo, entidade_id AS entidadeId, criado_em AS criadoEm, ativa, dados
+       FROM research WHERE tipo = 'partido' ORDER BY id DESC`,
+    )
+  ).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
+  return { parties, researchPartidos, quiz: await quizDoUsuario(userId) };
+}
+
+const chaveGrupo = (cargo: string, uf: string) => `${cargo}:${uf}`;
+
+interface LinhaCandidato {
+  id: number;
+  nome: string;
+  cargo: string;
+  uf: string;
+  partyId: number | null;
+  foto: string | null;
+  pesquisaId: number | null;
+  pesquisaCriadoEm: string | null;
+  pesquisaAtiva: number | null;
+  pesquisaDados: string | null;
+}
+
+// monta os itens (compat + conflito) e calcula o ranking (posição dentro de cada cargo+uf)
+// dentro do próprio conjunto recebido — quem chama decide o quanto filtrar antes, pra manter
+// o cálculo barato (ex: uma corrida específica) ou aceitar o custo de rodar em tudo (busca ampla)
+function montarItensRankeados(linhas: LinhaCandidato[], quiz: QuizState) {
+  const itens = linhas.map((l) => {
+    const dados = l.pesquisaDados ? JSON.parse(l.pesquisaDados) : null;
+    const compat = dados ? compatibilidade(quiz, dados.quiz, dados.polemicas) : null;
+    return {
+      cand: { id: l.id, nome: l.nome, cargo: l.cargo, uf: l.uf, partyId: l.partyId, foto: l.foto },
+      pesquisa:
+        l.pesquisaId != null
+          ? { id: l.pesquisaId, tipo: 'candidato' as const, entidadeId: l.id, criadoEm: l.pesquisaCriadoEm!, ativa: l.pesquisaAtiva === 1, dados }
+          : undefined,
+      compat,
+      conflito: !!compat && compat.conflitos.length > 0,
+      rank: null as number | null,
+      totalGrupo: 0,
+    };
+  });
+
+  const grupos = new Map<string, typeof itens>();
+  for (const it of itens) {
+    if (it.compat?.pct == null || it.conflito) continue;
+    const k = chaveGrupo(it.cand.cargo, it.cand.uf);
+    grupos.set(k, [...(grupos.get(k) ?? []), it]);
+  }
+  for (const membros of grupos.values()) {
+    membros.sort((a, b) => b.compat!.pct! - a.compat!.pct! || a.cand.nome.localeCompare(b.cand.nome));
+    membros.forEach((m, i) => {
+      m.rank = i + 1;
+      m.totalGrupo = membros.length;
+    });
+  }
+  return itens;
+}
+
+function ordenarItens<T extends { compat: { pct: number | null } | null; conflito: boolean; cand: { nome: string } }>(
+  itens: T[],
+  ordem: string,
+): T[] {
+  if (ordem === 'nome') return [...itens].sort((a, b) => a.cand.nome.localeCompare(b.cand.nome));
+  const peso = (i: T) => (i.conflito ? 2 : i.compat?.pct != null ? 0 : 1);
+  return [...itens].sort((a, b) => peso(a) - peso(b) || (b.compat?.pct ?? 0) - (a.compat?.pct ?? 0) || a.cand.nome.localeCompare(b.cand.nome));
+}
+
+async function linhasGrupo(cargo: string, uf: string): Promise<LinhaCandidato[]> {
+  return all<LinhaCandidato>(
+    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
+            r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
+     FROM candidates c
+     LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+     WHERE c.cargo = ? AND c.uf = ?`,
+    [cargo, uf],
+  );
+}
+
+// opções (nome, número, partido, foto) pra popular o <select> da Colinha — sem compatibilidade,
+// que depende do quiz de cada usuário. Como só muda quando um admin edita candidato/pesquisa,
+// fica em cache em memória por cargo+uf (a Colinha nunca filtra por outra coisa).
+interface OpcaoColinha {
+  id: number;
+  nome: string;
+  cargo: string;
+  uf: string;
+  partyId: number | null;
+  foto: string | null;
+  numeroUrna: string | null;
+}
+const cacheOpcoesColinha = new Map<string, OpcaoColinha[]>();
+function invalidarCacheColinha() {
+  cacheOpcoesColinha.clear();
 }
 
 const api = express.Router();
@@ -109,6 +222,56 @@ api.post('/auth/login', async (req, res) => {
   if (!u || !conferirSenha(senha, u.password_hash)) throw new HttpError(401, 'Usuário/email ou senha incorretos');
   await criarSessao(res, u.id);
   res.json({ id: u.id, username: u.username, email: u.email, isAdmin: u.isAdmin === 1 });
+});
+
+// login com Google: o botão é nosso (não o do Google), então usamos o modo "token client" do
+// Google Identity Services — o clique abre o popup do Google e devolve um access token, que
+// aqui a gente confere chamando o userinfo do Google (sem precisar de client secret).
+api.post('/auth/google', async (req, res) => {
+  const accessToken = texto(req.body.accessToken, 'accessToken');
+  const clientId = process.env.VITE_GOOGLE_CLIENT_ID;
+  if (!clientId) throw new HttpError(500, 'Login com Google não está configurado');
+
+  const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!r.ok) throw new HttpError(401, 'Token do Google inválido ou expirado');
+  const payload = (await r.json()) as { email?: string; email_verified?: boolean };
+  if (!payload.email || !payload.email_verified) throw new HttpError(401, 'Email do Google não verificado');
+
+  const email = payload.email.toLowerCase();
+  const existente = await get<{ id: number; username: string; email: string | null; isAdmin: number }>(
+    'SELECT id, username, email, is_admin AS isAdmin FROM users WHERE email = ?',
+    [email],
+  );
+
+  let usuarioFinal: { id: number; username: string; email: string | null; isAdmin: number };
+  if (existente) {
+    usuarioFinal = existente;
+  } else {
+    const { n } = (await get<{ n: number }>('SELECT COUNT(*) AS n FROM users'))!;
+    const isAdmin = n === 0;
+    const base = email.split('@')[0].replace(/[^a-z0-9._-]/gi, '').toLowerCase() || 'usuario';
+    let username = base;
+    let sufixo = 1;
+    while (await get('SELECT id FROM users WHERE username = ?', [username])) {
+      username = `${base}${++sufixo}`;
+    }
+    const senhaAleatoria = hashSenha(crypto.randomBytes(32).toString('hex'));
+    const novo = await run('INSERT INTO users (username, email, password_hash, is_admin, criado_em) VALUES (?, ?, ?, ?, ?)', [
+      username,
+      email,
+      senhaAleatoria,
+      isAdmin ? 1 : 0,
+      new Date().toISOString(),
+    ]);
+    const userId = Number(novo.lastInsertRowid);
+    if (isAdmin && quizLegado) await run('INSERT INTO quiz (user_id, dados) VALUES (?, ?)', [userId, quizLegado]);
+    usuarioFinal = { id: userId, username, email, isAdmin: isAdmin ? 1 : 0 };
+  }
+
+  await criarSessao(res, usuarioFinal.id);
+  res.json({ id: usuarioFinal.id, username: usuarioFinal.username, email: usuarioFinal.email, isAdmin: usuarioFinal.isAdmin === 1 });
 });
 
 api.post('/auth/logout', async (req, res) => {
@@ -232,7 +395,246 @@ api.get('/feedback', exigirAdmin, async (_req, res) => {
 });
 
 api.get('/data', async (req, res) => {
-  res.json(await listarTudo(usuario(req).userId));
+  res.json(await listarBootstrap(usuario(req).userId));
+});
+
+api.get('/contagens', exigirAdmin, async (_req, res) => {
+  const candidatos = (await get<{ n: number }>('SELECT COUNT(*) AS n FROM candidates'))!.n;
+  const pesquisas = (await get<{ n: number }>('SELECT COUNT(*) AS n FROM research'))!.n;
+  res.json({ candidatos, pesquisas });
+});
+
+// acima disso, buscar a pesquisa (texto grande) de todo mundo pra ordenar por compatibilidade
+// fica caro demais (a base tem ~20 mil candidatos) — nesse caso cai pro caminho rápido abaixo
+const LIMITE_CALCULO_COMPLETO = 1500;
+
+// lista/busca paginada de candidatos, já com compatibilidade e ranking calculados no servidor.
+// sem `limit`, devolve tudo que casar com o filtro (uso da Colinha, que já filtra por cargo/uf
+// e sempre lida com conjuntos pequenos); com `limit`, pagina (uso da tela de Lista).
+api.get('/candidatos', async (req, res) => {
+  const { cargo, uf, partido, busca, ordem, top3 } = req.query;
+  const condicoes: string[] = [];
+  const args: (string | number)[] = [];
+  if (typeof cargo === 'string' && cargo) {
+    condicoes.push('c.cargo = ?');
+    args.push(cargo);
+  }
+  if (typeof uf === 'string' && uf) {
+    condicoes.push('c.uf = ?');
+    args.push(uf);
+  }
+  if (typeof partido === 'string' && partido) {
+    condicoes.push('c.party_id = ?');
+    args.push(Number(partido));
+  }
+  if (typeof busca === 'string' && busca.trim()) {
+    condicoes.push('LOWER(c.nome) LIKE ?');
+    args.push(`%${busca.trim().toLowerCase()}%`);
+  }
+  const where = condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '';
+  const quiz = await quizDoUsuario(usuario(req).userId);
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const limitParam = req.query.limit;
+  const partiesRows = await all<{ id: number; sigla: string; nome: string; logo: string | null }>('SELECT id, sigla, nome, logo FROM parties');
+  const partidosPorId = new Map(partiesRows.map((p) => [p.id, p]));
+  const montarLeve = (it: ReturnType<typeof montarItensRankeados>[number]) => ({
+    cand: it.cand,
+    party: it.cand.partyId != null ? partidosPorId.get(it.cand.partyId) : undefined,
+    compat: it.compat,
+    conflito: it.conflito,
+    rank: it.rank,
+    totalGrupo: it.totalGrupo,
+    temPesquisa: !!it.pesquisa,
+    numeroUrna: it.pesquisa?.dados.basico.numero_urna ?? null,
+    situacao: it.pesquisa?.dados.basico.situacao ?? null,
+  });
+
+  const { n: totalFiltrado } = (await get<{ n: number }>(`SELECT COUNT(*) AS n FROM candidates c ${where}`, args))!;
+
+  if (totalFiltrado > LIMITE_CALCULO_COMPLETO) {
+    // caminho rápido: pagina primeiro no SQL (só nome, sem tocar na pesquisa de todo mundo) e
+    // calcula compat/ranking só de quem entra na página — ordenar por compatibilidade ou o
+    // filtro "top 3" exigem o grupo inteiro carregado, então só valem com um filtro mais estreito
+    const linhasPagina = await all<{ id: number; nome: string; cargo: string; uf: string; partyId: number | null; foto: string | null }>(
+      `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto FROM candidates c ${where} ORDER BY c.nome LIMIT ? OFFSET ?`,
+      [...args, Number(limitParam) || LIMITE_CALCULO_COMPLETO, offset],
+    );
+    const ids = linhasPagina.map((l) => l.id);
+    const pesquisas = ids.length
+      ? await all<{ entidadeId: number; id: number; criadoEm: string; ativa: number; dados: string }>(
+          `SELECT entidade_id AS entidadeId, id, criado_em AS criadoEm, ativa, dados FROM research
+           WHERE tipo = 'candidato' AND ativa = 1 AND entidade_id IN (${ids.map(() => '?').join(',')})`,
+          ids,
+        )
+      : [];
+    const pesquisaPorCandidato = new Map(pesquisas.map((p) => [p.entidadeId, p]));
+    const leve = linhasPagina.map((l) => {
+      const p = pesquisaPorCandidato.get(l.id);
+      const dados = p ? JSON.parse(p.dados) : null;
+      const compat = dados ? compatibilidade(quiz, dados.quiz, dados.polemicas) : null;
+      return {
+        cand: { id: l.id, nome: l.nome, cargo: l.cargo, uf: l.uf, partyId: l.partyId, foto: l.foto },
+        party: l.partyId != null ? partidosPorId.get(l.partyId) : undefined,
+        compat,
+        conflito: !!compat && compat.conflitos.length > 0,
+        rank: null,
+        totalGrupo: 0,
+        temPesquisa: !!p,
+        numeroUrna: dados?.basico.numero_urna ?? null,
+        situacao: dados?.basico.situacao ?? null,
+      };
+    });
+    res.json({ total: totalFiltrado, itens: leve });
+    return;
+  }
+
+  const linhas = await all<LinhaCandidato>(
+    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
+            r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
+     FROM candidates c
+     LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+     ${where}`,
+    args,
+  );
+
+  let itens = montarItensRankeados(linhas, quiz);
+  if (top3 === '1' || top3 === 'true') itens = itens.filter((i) => i.rank != null && i.rank <= 3);
+  itens = ordenarItens(itens, typeof ordem === 'string' ? ordem : 'compat');
+
+  const total = itens.length;
+  const pagina = typeof limitParam === 'string' && limitParam ? itens.slice(offset, offset + Number(limitParam)) : itens;
+
+  res.json({ total, itens: pagina.map(montarLeve) });
+});
+
+api.get('/candidatos/:id', async (req, res) => {
+  const id = idParam(req);
+  const cand = await get<{ cargo: string; uf: string }>('SELECT cargo, uf FROM candidates WHERE id = ?', [id]);
+  if (!cand) throw new HttpError(404, 'Candidato não encontrado');
+
+  // carrega o grupo inteiro (mesmo cargo+uf) pra calcular o ranking corretamente
+  const linhas = await linhasGrupo(cand.cargo, cand.uf);
+  const quiz = await quizDoUsuario(usuario(req).userId);
+  const itens = montarItensRankeados(linhas, quiz);
+  const it = itens.find((i) => i.cand.id === id);
+  if (!it) throw new HttpError(404, 'Candidato não encontrado');
+
+  const party = it.cand.partyId != null ? await get('SELECT id, sigla, nome, logo FROM parties WHERE id = ?', [it.cand.partyId]) : undefined;
+  res.json({ ...it, party });
+});
+
+// opções pro <select> da Colinha: leve (sem compat) e cacheável, já que não depende do usuário.
+api.get('/colinha-opcoes', async (req, res) => {
+  const { cargo, uf } = req.query;
+  const chave = `${typeof cargo === 'string' ? cargo : ''}:${typeof uf === 'string' ? uf : ''}`;
+  const emCache = cacheOpcoesColinha.get(chave);
+  if (emCache) {
+    res.json(emCache);
+    return;
+  }
+  const condicoes: string[] = [];
+  const args: (string | number)[] = [];
+  if (typeof cargo === 'string' && cargo) {
+    condicoes.push('c.cargo = ?');
+    args.push(cargo);
+  }
+  if (typeof uf === 'string' && uf) {
+    condicoes.push('c.uf = ?');
+    args.push(uf);
+  }
+  const where = condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '';
+  const linhas = await all<{ id: number; nome: string; cargo: string; uf: string; partyId: number | null; foto: string | null; dados: string | null }>(
+    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto, r.dados AS dados
+     FROM candidates c
+     LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+     ${where}
+     ORDER BY c.nome`,
+    args,
+  );
+  const opcoes: OpcaoColinha[] = linhas.map((l) => ({
+    id: l.id,
+    nome: l.nome,
+    cargo: l.cargo,
+    uf: l.uf,
+    partyId: l.partyId,
+    foto: l.foto,
+    numeroUrna: l.dados ? (JSON.parse(l.dados).basico?.numero_urna ?? null) : null,
+  }));
+  cacheOpcoesColinha.set(chave, opcoes);
+  res.json(opcoes);
+});
+
+// candidato com maior compatibilidade em cada cargo do estado (+ presidente, que é nacional) —
+// só os ids e o %, pra pré-selecionar a Colinha sem mandar a pesquisa de todo mundo pro cliente.
+// só 2 consultas (o estado inteiro de um lado, presidente do outro) em vez de uma por cargo.
+api.get('/colinha-melhores', async (req, res) => {
+  const uf = typeof req.query.uf === 'string' ? req.query.uf : '';
+  if (!uf) throw new HttpError(400, 'uf é obrigatório');
+  const quiz = await quizDoUsuario(usuario(req).userId);
+
+  const linhasComum = (where: string, args: (string | number)[]) =>
+    all<LinhaCandidato>(
+      `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
+              r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
+       FROM candidates c
+       LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+       ${where}`,
+      args,
+    );
+
+  const [linhasUf, linhasPresidente] = await Promise.all([
+    linhasComum("WHERE c.uf = ? AND c.cargo != 'presidente'", [uf]),
+    linhasComum("WHERE c.cargo = 'presidente'", []),
+  ]);
+
+  const itensUf = montarItensRankeados(linhasUf, quiz);
+  const itensPresidente = montarItensRankeados(linhasPresidente, quiz);
+
+  const melhoresDoCargo = (itens: typeof itensUf, cargo: string, quantos: number) => {
+    const validos = itens.filter((i) => i.cand.cargo === cargo && i.compat?.pct != null && !i.conflito);
+    validos.sort((a, b) => b.compat!.pct! - a.compat!.pct!);
+    return validos.slice(0, quantos).map((i) => ({ id: i.cand.id, pct: i.compat!.pct! }));
+  };
+
+  res.json({
+    presidente: melhoresDoCargo(itensPresidente, 'presidente', 1),
+    governador: melhoresDoCargo(itensUf, 'governador', 1),
+    senador: melhoresDoCargo(itensUf, 'senador', 2),
+    deputado_federal: melhoresDoCargo(itensUf, 'deputado_federal', 1),
+    deputado_estadual: melhoresDoCargo(itensUf, 'deputado_estadual', 1),
+  });
+});
+
+// compatibilidade de um único candidato — sem carregar o grupo inteiro (usado pra escolhas
+// manuais/restauradas na Colinha, que não vêm no cálculo dos "melhores" de cima)
+api.get('/candidato-compat/:id', async (req, res) => {
+  const id = idParam(req);
+  const pesquisa = await get<{ dados: string }>(
+    "SELECT dados FROM research WHERE tipo = 'candidato' AND entidade_id = ? AND ativa = 1",
+    [id],
+  );
+  if (!pesquisa) {
+    res.json({ pct: null });
+    return;
+  }
+  const dados = JSON.parse(pesquisa.dados);
+  const quiz = await quizDoUsuario(usuario(req).userId);
+  const compat = compatibilidade(quiz, dados.quiz, dados.polemicas);
+  res.json({ pct: compat.pct });
+});
+
+api.get('/research', async (req, res) => {
+  const { tipo, entidadeId } = req.query;
+  if (tipo !== 'candidato' && tipo !== 'partido') throw new HttpError(400, 'Tipo inválido');
+  const id = Number(entidadeId);
+  if (!Number.isInteger(id)) throw new HttpError(400, 'entidadeId inválido');
+  const lista = (
+    await all<{ ativa: number; dados: string }>(
+      'SELECT id, tipo, entidade_id AS entidadeId, criado_em AS criadoEm, ativa, dados FROM research WHERE tipo = ? AND entidade_id = ? ORDER BY id DESC',
+      [tipo, id],
+    )
+  ).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
+  res.json(lista);
 });
 
 api.post('/parties', exigirAdmin, async (req, res) => {
@@ -281,6 +683,7 @@ api.post('/candidates', exigirAdmin, async (req, res) => {
     c.partyId,
     c.foto,
   ]);
+  invalidarCacheColinha();
   res.json({ id: Number(r.lastInsertRowid) });
 });
 
@@ -294,6 +697,7 @@ api.put('/candidates/:id', exigirAdmin, async (req, res) => {
     c.foto,
     idParam(req),
   ]);
+  invalidarCacheColinha();
   res.json({ ok: true });
 });
 
@@ -303,6 +707,7 @@ api.delete('/candidates/:id', exigirAdmin, async (req, res) => {
     await t.run("DELETE FROM research WHERE tipo = 'candidato' AND entidade_id = ?", [id]);
     await t.run('DELETE FROM candidates WHERE id = ?', [id]);
   });
+  invalidarCacheColinha();
   res.json({ ok: true });
 });
 
@@ -323,6 +728,7 @@ api.post('/research', exigirAdmin, async (req, res) => {
     ]);
     return Number(r.lastInsertRowid);
   });
+  if (tipo === 'candidato') invalidarCacheColinha();
   res.json({ id });
 });
 
@@ -334,6 +740,7 @@ api.post('/research/:id/activate', exigirAdmin, async (req, res) => {
     await t.run('UPDATE research SET ativa = 0 WHERE tipo = ? AND entidade_id = ?', [r.tipo, r.entidadeId]);
     await t.run('UPDATE research SET ativa = 1 WHERE id = ?', [id]);
   });
+  if (r.tipo === 'candidato') invalidarCacheColinha();
   res.json({ ok: true });
 });
 
@@ -355,6 +762,7 @@ api.delete('/research/:id', exigirAdmin, async (req, res) => {
       );
     }
   });
+  if (r.tipo === 'candidato') invalidarCacheColinha();
   res.json({ ok: true });
 });
 
@@ -391,7 +799,7 @@ api.put('/colinha', async (req, res) => {
 });
 
 api.get('/export', exigirAdmin, async (req, res) => {
-  const tudo = await listarTudo(usuario(req).userId);
+  const tudo = await listarTudoCompleto(usuario(req).userId);
   res.setHeader('Content-Disposition', `attachment; filename="capivara-politica-${new Date().toISOString().slice(0, 10)}.json"`);
   res.json({ versao: 1, ...tudo });
 });
@@ -434,6 +842,7 @@ api.post('/import', exigirAdmin, async (req, res) => {
     await t.run('DELETE FROM quiz WHERE user_id = ?', [userId]);
     await t.run('INSERT INTO quiz (user_id, dados) VALUES (?, ?)', [userId, JSON.stringify(b.quiz ?? EMPTY_QUIZ)]);
   });
+  invalidarCacheColinha();
   res.json({ ok: true });
 });
 

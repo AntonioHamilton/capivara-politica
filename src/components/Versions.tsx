@@ -1,24 +1,48 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
+import type { Pesquisa } from '../lib/types.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { dataHoraBR } from '../lib/format.ts';
 import { PERGUNTAS } from '../lib/questions.ts';
-import { useStore, versoes } from '../lib/store.tsx';
 
 const ROTULO: Record<string, string> = { sim: 'Sim', nao: 'Não', sem_info: 'Sem info' };
 
-export function Versions({ tipo, entidadeId }: { tipo: 'candidato' | 'partido'; entidadeId: number }) {
-  const { data, refresh } = useStore();
+export function Versions({
+  tipo,
+  entidadeId,
+  onChange,
+}: {
+  tipo: 'candidato' | 'partido';
+  entidadeId: number;
+  onChange?: () => void;
+}) {
   const { user } = useAuth();
-  const lista = versoes(data, tipo, entidadeId);
-  const ativa = lista.find((v) => v.ativa);
+  const [lista, setLista] = useState<Pesquisa[]>([]);
+  const [carregado, setCarregado] = useState(false);
   const [comparando, setComparando] = useState<number | null>(null);
 
+  const carregar = () => {
+    return api.researchVersoes(tipo, entidadeId).then((r) => {
+      setLista(r);
+      setCarregado(true);
+    });
+  };
+
+  useEffect(() => {
+    setCarregado(false);
+    carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo, entidadeId]);
+
+  const ativa = lista.find((v) => v.ativa);
+
+  if (!carregado) return <p className="muted">Carregando...</p>;
   if (!lista.length) return <p className="vazio">Nenhuma pesquisa salva ainda.</p>;
 
   const acao = async (fn: () => Promise<unknown>) => {
     await fn();
-    await refresh();
+    await carregar();
+    onChange?.();
   };
 
   const alvo = lista.find((v) => v.id === comparando);

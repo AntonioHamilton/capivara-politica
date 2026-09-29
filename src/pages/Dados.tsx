@@ -131,12 +131,18 @@ function Usuarios() {
 export function Dados() {
   const { data, refresh } = useStore();
   const [msg, setMsg] = useState<string | null>(null);
+  const [contagens, setContagens] = useState<{ candidatos: number; pesquisas: number } | null>(null);
+
+  useEffect(() => {
+    api.contagens().then(setContagens);
+  }, []);
 
   const importar = async (file: File) => {
     if (!window.confirm('Importar vai SUBSTITUIR todos os dados atuais (candidatos, partidos, pesquisas e quiz). Continuar?')) return;
     try {
       await api.importAll(JSON.parse(await file.text()));
       await refresh();
+      api.contagens().then(setContagens);
       setMsg('Backup importado com sucesso.');
     } catch (e) {
       setMsg(`Não foi possível importar: ${(e as Error).message}`);
@@ -149,7 +155,9 @@ export function Dados() {
         <div>
           <h1>Dados</h1>
           <p className="muted">
-            {data.candidates.length} candidatos · {data.parties.length} partidos · {data.research.length} pesquisas salvas
+            {contagens ? `${contagens.candidatos} candidatos · ` : ''}
+            {data.parties.length} partidos
+            {contagens ? ` · ${contagens.pesquisas} pesquisas salvas` : ''}
           </p>
         </div>
       </div>

@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toPng } from 'html-to-image';
-import { Avatar, PartyBadge } from '../components/ui.tsx';
+import { Avatar, Loading, PartyBadge } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
-import type { ColinhaItemPublico } from '../lib/api.ts';
-import { useItens } from '../lib/ranking.ts';
-import type { Item } from '../lib/ranking.ts';
+import type { ColinhaItemPublico, ColinhaPublica, MelhoresColinha, OpcaoColinha } from '../lib/api.ts';
+import { estadoMaisProximo } from '../lib/geo.ts';
 import { quizCompleto } from '../lib/scoring.ts';
 import { useStore } from '../lib/store.tsx';
 import { CARGOS, UFS, ufLabel } from '../lib/types.ts';
-import type { Cargo } from '../lib/types.ts';
+import type { Cargo, Party } from '../lib/types.ts';
 
-const ORDEM_CARGOS: Cargo[] = ['presidente', 'governador', 'senador', 'deputado_federal', 'deputado_estadual'];
+const ORDEM_CARGOS: Cargo[] = ['deputado_federal', 'deputado_estadual', 'senador', 'governador', 'presidente'];
 
 const DIGITOS_CARGO: Record<Cargo, number> = {
   presidente: 2,
@@ -31,6 +30,7 @@ const SLOTS_CARGO: Record<Cargo, number> = {
 };
 
 const UFS_ORDENADAS = Object.entries(UFS).sort((a, b) => a[1].localeCompare(b[1]));
+const UF_PADRAO = 'SE';
 
 // usado no lugar de fotos externas (bloqueadas por CORS) ao gerar a imagem da colinha
 const PLACEHOLDER_FOTO =
@@ -41,7 +41,7 @@ interface Grupo {
   cargo: Cargo;
   uf: string;
   slot: number | null;
-  itens: Item[];
+  opcoes: OpcaoColinha[];
 }
 
 interface Escolha {
@@ -50,9 +50,8 @@ interface Escolha {
   numero: string;
 }
 
-function rotulo(item: Item): string {
-  const numero = item.pesquisa?.dados.basico.numero_urna;
-  return numero ? `${item.cand.nome} · ${numero}` : item.cand.nome;
+function rotulo(opcao: OpcaoColinha): string {
+  return opcao.numeroUrna ? `${opcao.nome} · ${opcao.numeroUrna}` : opcao.nome;
 }
 
 function nomeCargo(grupo: Grupo): string {
@@ -60,13 +59,16 @@ function nomeCargo(grupo: Grupo): string {
   return `${grupo.slot}º ${CARGOS[grupo.cargo]}`;
 }
 
-function estadoInicial(grupo: Grupo): Escolha {
+// o "melhor" (maior compatibilidade) de cada cargo já vem calculado do servidor — a opção só
+// serve aqui pra pegar o número da urna pro preenchimento inicial
+function estadoInicial(grupo: Grupo, melhores: MelhoresColinha | undefined): Escolha {
   const idx = (grupo.slot ?? 1) - 1;
-  const padrao = grupo.itens[idx] as Item | undefined;
+  const melhor = melhores?.[grupo.cargo][idx];
+  const opcao = melhor ? grupo.opcoes.find((o) => o.id === melhor.id) : undefined;
   return {
-    candidatoId: padrao?.cand.id ?? null,
+    candidatoId: melhor?.id ?? null,
     nomeManual: '',
-    numero: padrao?.pesquisa?.dados.basico.numero_urna ?? '',
+    numero: opcao?.numeroUrna ?? '',
   };
 }
 
@@ -121,12 +123,16 @@ function CartaoCargo({
   grupo,
   escolha,
   onMudar,
+  party,
+  pct,
 }: {
   grupo: Grupo;
   escolha: Escolha;
   onMudar: (escolha: Escolha) => void;
+  party: Party | undefined;
+  pct: number | null | undefined;
 }) {
-  const item = escolha.candidatoId != null ? grupo.itens.find((i) => i.cand.id === escolha.candidatoId) : undefined;
+  const opcao = escolha.candidatoId != null ? grupo.opcoes.find((o) => o.id === escolha.candidatoId) : undefined;
   const digitos = DIGITOS_CARGO[grupo.cargo];
 
   const selecionarCandidato = (valor: string) => {
@@ -134,27 +140,27 @@ function CartaoCargo({
       onMudar({ ...escolha, candidatoId: null });
       return;
     }
-    const escolhido = grupo.itens.find((i) => i.cand.id === Number(valor));
+    const escolhido = grupo.opcoes.find((o) => o.id === Number(valor));
     onMudar({
       candidatoId: Number(valor),
       nomeManual: '',
-      numero: escolhido?.pesquisa?.dados.basico.numero_urna ?? '',
+      numero: escolhido?.numeroUrna ?? '',
     });
   };
 
   const mudarNomeManual = (nomeManual: string) => {
-    const achado = grupo.itens.find((i) => i.cand.nome.trim().toLowerCase() === nomeManual.trim().toLowerCase());
+    const achado = grupo.opcoes.find((o) => o.nome.trim().toLowerCase() === nomeManual.trim().toLowerCase());
     if (achado) {
-      onMudar({ candidatoId: achado.cand.id, nomeManual: '', numero: achado.pesquisa?.dados.basico.numero_urna ?? '' });
+      onMudar({ candidatoId: achado.id, nomeManual: '', numero: achado.numeroUrna ?? '' });
       return;
     }
     onMudar({ ...escolha, candidatoId: null, nomeManual });
   };
 
   const mudarNumero = (numero: string) => {
-    const achado = grupo.itens.find((i) => i.pesquisa?.dados.basico.numero_urna === numero);
+    const achado = grupo.opcoes.find((o) => o.numeroUrna === numero);
     if (achado) {
-      onMudar({ candidatoId: achado.cand.id, nomeManual: '', numero });
+      onMudar({ candidatoId: achado.id, nomeManual: '', numero });
       return;
     }
     onMudar({ ...escolha, numero });
@@ -178,9 +184,9 @@ function CartaoCargo({
           aria-label={`Escolher ${nomeCargo(grupo)} na lista`}
         >
           <option value="">Fora da base — digitar nome</option>
-          {grupo.itens.map((i) => (
-            <option key={i.cand.id} value={i.cand.id}>
-              {rotulo(i)}
+          {grupo.opcoes.map((o) => (
+            <option key={o.id} value={o.id}>
+              {rotulo(o)}
             </option>
           ))}
         </select>
@@ -200,26 +206,30 @@ function CartaoCargo({
       </div>
 
       <div className="colinha-cargo-corpo">
-        {item ? (
+        {opcao ? (
           <>
-            <Avatar src={item.cand.foto} nome={item.cand.nome} size={64} />
-            <div className="colinha-cargo-info">
-              <strong>{item.cand.nome}</strong>
-              <PartyBadge party={item.party} uf={item.cand.uf} />
-              {item.compat?.pct != null ? (
-                <span className="nota">{item.compat.pct}% de compatibilidade</span>
-              ) : (
-                <span className="selo-neutro">Dados insuficientes</span>
-              )}
+            <div className="colinha-cargo-topo">
+              <Avatar src={opcao.foto} nome={opcao.nome} size={64} />
+              <div className="colinha-cargo-info">
+                <strong>{opcao.nome}</strong>
+                <PartyBadge party={party} uf={opcao.uf} />
+              </div>
             </div>
+            {pct != null ? (
+              <span className="nota">{pct}% de compatibilidade</span>
+            ) : (
+              <span className="selo-neutro">{pct === undefined ? 'Calculando...' : 'Dados insuficientes'}</span>
+            )}
           </>
         ) : escolha.nomeManual ? (
           <>
-            <Avatar src={null} nome={escolha.nomeManual} size={64} />
-            <div className="colinha-cargo-info">
-              <strong>{escolha.nomeManual}</strong>
-              <span className="selo-neutro">Fora da base — escolha manual</span>
+            <div className="colinha-cargo-topo">
+              <Avatar src={null} nome={escolha.nomeManual} size={64} />
+              <div className="colinha-cargo-info">
+                <strong>{escolha.nomeManual}</strong>
+              </div>
             </div>
+            <span className="selo-neutro">Fora da base — escolha manual</span>
           </>
         ) : (
           <p className="muted pequeno-texto">Nenhum candidato cadastrado nesse cargo. Escolha na lista ou digite o nome e o número.</p>
@@ -231,7 +241,20 @@ function CartaoCargo({
 
 export function Colinha() {
   const { data } = useStore();
-  const itens = useItens();
+  const [ufEscolhida, setUfEscolhida] = useState<string | null>(null);
+  const uf = ufEscolhida ?? UF_PADRAO;
+
+  const [opcoesPresidente, setOpcoesPresidente] = useState<OpcaoColinha[]>([]);
+  const [presidenteCarregado, setPresidenteCarregado] = useState(false);
+  const [opcoesUf, setOpcoesUf] = useState<OpcaoColinha[]>([]);
+  const [melhores, setMelhores] = useState<MelhoresColinha | undefined>(undefined);
+  const [racaCarregada, setRacaCarregada] = useState(false);
+  // true depois da primeira vez que os cargos do estado carregaram — depois disso, trocar de
+  // estado não volta pra tela cheia de novo, só mostra o loading no lugar dos cartões que mudam
+  const [primeiraRacaPronta, setPrimeiraRacaPronta] = useState(false);
+  const [pctPorId, setPctPorId] = useState<Record<number, number | null>>({});
+
+  const [colinhaSalvaResp, setColinhaSalvaResp] = useState<ColinhaPublica | null | undefined>(undefined);
   const [escolhas, setEscolhas] = useState<Record<string, Escolha>>({});
   const [carregado, setCarregado] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -239,38 +262,72 @@ export function Colinha() {
   const [msg, setMsg] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  // usa a UF mais comum entre os candidatos já cadastrados como sugestão inicial
-  const ufPadrao = useMemo(() => {
-    const contagem = new Map<string, number>();
-    for (const it of itens) {
-      if (it.cand.uf === 'BR') continue;
-      contagem.set(it.cand.uf, (contagem.get(it.cand.uf) ?? 0) + 1);
-    }
-    return [...contagem.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'SE';
-  }, [itens]);
-  const [ufEscolhida, setUfEscolhida] = useState<string | null>(null);
-  const uf = ufEscolhida ?? ufPadrao;
+  const partidosPorId = useMemo(() => new Map(data.parties.map((p) => [p.id, p])), [data.parties]);
+
+  // presidente é nacional (uf=BR), não muda com o estado escolhido — carrega uma vez só, e a
+  // lista de opções fica em cache no servidor (não depende do usuário)
+  useEffect(() => {
+    api.colinhaOpcoes({ cargo: 'presidente', uf: 'BR' }).then((r) => {
+      setOpcoesPresidente(r);
+      setPresidenteCarregado(true);
+    });
+  }, []);
+
+  // os demais cargos (governador, senador, deputados) dependem do estado escolhido — a lista de
+  // opções é leve/cacheada, e os "melhores" (compatibilidade) são calculados à parte, só pra
+  // pré-selecionar, sem mandar a pesquisa de todo mundo do estado pro cliente
+  useEffect(() => {
+    let ativo = true;
+    setRacaCarregada(false);
+    Promise.all([api.colinhaOpcoes({ uf }), api.colinhaMelhores(uf)])
+      .then(([opcoes, m]) => {
+        if (!ativo) return;
+        setOpcoesUf(opcoes);
+        setMelhores(m);
+      })
+      .finally(() => {
+        if (!ativo) return;
+        setRacaCarregada(true);
+        setPrimeiraRacaPronta(true);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [uf]);
+
+  // busca a colinha já salva do usuário (se existir) uma vez, ao entrar na página
+  useEffect(() => {
+    api.colinhaSalva().then(setColinhaSalvaResp);
+  }, []);
+
+  // pede a localização só se o usuário ainda não escolheu um estado nem tem uma colinha salva
+  // com estado definido — silenciosamente ignora se for negado ou indisponível
+  useEffect(() => {
+    if (ufEscolhida !== null) return;
+    if (colinhaSalvaResp === undefined) return;
+    if (colinhaSalvaResp?.itens.some((it) => it.uf !== 'BR')) return;
+    if (!('geolocation' in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUfEscolhida(estadoMaisProximo(pos.coords.latitude, pos.coords.longitude)),
+      () => {},
+      { timeout: 5000, maximumAge: 3600_000 },
+    );
+  }, [colinhaSalvaResp, ufEscolhida]);
+
+  const opcoes = useMemo(() => [...opcoesPresidente, ...opcoesUf], [opcoesPresidente, opcoesUf]);
 
   const grupos = useMemo(() => {
-    const porCargo = new Map<Cargo, Item[]>();
-    for (const it of itens) {
-      const ufDoCargo = it.cand.cargo === 'presidente' ? 'BR' : uf;
-      if (it.cand.uf !== ufDoCargo) continue;
-      if (!porCargo.has(it.cand.cargo)) porCargo.set(it.cand.cargo, []);
-      porCargo.get(it.cand.cargo)!.push(it);
+    const porCargo = new Map<Cargo, OpcaoColinha[]>();
+    for (const o of opcoes) {
+      if (!porCargo.has(o.cargo)) porCargo.set(o.cargo, []);
+      porCargo.get(o.cargo)!.push(o);
     }
-    for (const lista of porCargo.values()) {
-      lista.sort((a, b) => {
-        const pa = a.compat?.pct ?? -1;
-        const pb = b.compat?.pct ?? -1;
-        return pb - pa || a.cand.nome.localeCompare(b.cand.nome);
-      });
-    }
+    for (const lista of porCargo.values()) lista.sort((a, b) => a.nome.localeCompare(b.nome));
 
     const out: Grupo[] = [];
     for (const cargo of ORDEM_CARGOS) {
       const ufDoCargo = cargo === 'presidente' ? 'BR' : uf;
-      const itensCargo = porCargo.get(cargo) ?? [];
+      const opcoesCargo = porCargo.get(cargo) ?? [];
       const slots = SLOTS_CARGO[cargo];
       for (let slot = 1; slot <= slots; slot++) {
         out.push({
@@ -278,14 +335,14 @@ export function Colinha() {
           cargo,
           uf: ufDoCargo,
           slot: slots > 1 ? slot : null,
-          itens: itensCargo,
+          opcoes: opcoesCargo,
         });
       }
     }
     return out;
-  }, [itens, uf]);
+  }, [opcoes, uf]);
 
-  const escolhaDe = (grupo: Grupo): Escolha => escolhas[grupo.chave] ?? estadoInicial(grupo);
+  const escolhaDe = (grupo: Grupo): Escolha => escolhas[grupo.chave] ?? estadoInicial(grupo, melhores);
 
   const mudar = (chave: string, escolha: Escolha) => {
     setEscolhas((e) => ({ ...e, [chave]: escolha }));
@@ -294,46 +351,90 @@ export function Colinha() {
   const itensPublicos = (): ColinhaItemPublico[] =>
     grupos.map((g) => {
       const escolha = escolhaDe(g);
-      const item = escolha.candidatoId != null ? g.itens.find((i) => i.cand.id === escolha.candidatoId) : undefined;
+      const opcao = escolha.candidatoId != null ? g.opcoes.find((o) => o.id === escolha.candidatoId) : undefined;
       return {
         cargo: g.cargo,
         uf: g.uf,
         vaga: g.slot,
-        nome: item ? item.cand.nome : escolha.nomeManual,
+        nome: opcao ? opcao.nome : escolha.nomeManual,
         numero: escolha.numero || null,
-        foto: item?.cand.foto ?? null,
-        partido: item?.party?.sigla ?? null,
+        foto: opcao?.foto ?? null,
+        partido: opcao?.partyId != null ? (partidosPorId.get(opcao.partyId)?.sigla ?? null) : null,
       };
     });
 
-  // ao abrir a página, carrega a colinha já salva do usuário (se existir) em vez de
-  // sobrescrever com a sugestão automática por compatibilidade
+  // já que o "melhor" de cada cargo vem calculado do servidor, aproveita o % que já veio pronto
+  // em vez de pedir de novo — só busca sob demanda quando o usuário troca pra outro candidato
   useEffect(() => {
-    let ativo = true;
-    api
-      .colinhaSalva()
-      .then((salva) => {
-        if (!ativo || !salva?.itens.length) return;
-        const ufSalva = salva.itens.find((it) => it.uf !== 'BR')?.uf;
-        if (ufSalva) setUfEscolhida(ufSalva);
-        const novas: Record<string, Escolha> = {};
-        for (const it of salva.itens) {
-          const chave = it.vaga ? `${it.cargo}:${it.uf}:${it.vaga}` : `${it.cargo}:${it.uf}`;
-          const achado = itens.find((i) => i.cand.cargo === it.cargo && i.cand.uf === it.uf && i.cand.nome === it.nome);
-          novas[chave] = achado
-            ? { candidatoId: achado.cand.id, nomeManual: '', numero: it.numero ?? '' }
-            : { candidatoId: null, nomeManual: it.nome, numero: it.numero ?? '' };
+    if (!melhores) return;
+    setPctPorId((p) => {
+      const novo = { ...p };
+      let mudou = false;
+      for (const lista of Object.values(melhores)) {
+        for (const m of lista) {
+          if (!(m.id in novo)) {
+            novo[m.id] = m.pct;
+            mudou = true;
+          }
         }
-        setEscolhas(novas);
-      })
-      .finally(() => {
-        if (ativo) setCarregado(true);
+      }
+      return mudou ? novo : p;
+    });
+  }, [melhores]);
+
+  // busca a compatibilidade de qualquer candidato escolhido manualmente que ainda não conhecemos
+  useEffect(() => {
+    const faltando = Object.values(escolhas)
+      .map((e) => e.candidatoId)
+      .filter((id): id is number => id != null && !(id in pctPorId));
+    if (!faltando.length) return;
+    let ativo = true;
+    Promise.all(
+      faltando.map((id) =>
+        api
+          .candidatoCompat(id)
+          .then((r) => [id, r.pct] as const)
+          .catch(() => [id, null] as const),
+      ),
+    ).then((pares) => {
+      if (!ativo) return;
+      setPctPorId((p) => {
+        const novo = { ...p };
+        for (const [id, pct] of pares) novo[id] = pct;
+        return novo;
       });
+    });
     return () => {
       ativo = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [escolhas, pctPorId]);
+
+  // aplica a colinha salva assim que ela e os candidatos do estado certo estiverem carregados
+  // (roda uma única vez — depois disso o usuário já está editando livremente)
+  useEffect(() => {
+    if (carregado || colinhaSalvaResp === undefined) return;
+    const salva = colinhaSalvaResp;
+    if (!salva?.itens.length) {
+      setCarregado(true);
+      return;
+    }
+    const ufSalva = salva.itens.find((it) => it.uf !== 'BR')?.uf;
+    if (ufSalva && ufSalva !== uf) {
+      setUfEscolhida(ufSalva);
+      return; // espera recarregar as opções pro estado certo antes de tentar casar os nomes
+    }
+    if (!racaCarregada) return;
+    const novas: Record<string, Escolha> = {};
+    for (const it of salva.itens) {
+      const chave = it.vaga ? `${it.cargo}:${it.uf}:${it.vaga}` : `${it.cargo}:${it.uf}`;
+      const achado = opcoes.find((o) => o.cargo === it.cargo && o.uf === it.uf && o.nome === it.nome);
+      novas[chave] = achado
+        ? { candidatoId: achado.id, nomeManual: '', numero: it.numero ?? '' }
+        : { candidatoId: null, nomeManual: it.nome, numero: it.numero ?? '' };
+    }
+    setEscolhas(novas);
+    setCarregado(true);
+  }, [colinhaSalvaResp, racaCarregada, opcoes, uf, carregado]);
 
   // salva automaticamente qualquer edição do usuário, uma vez que a colinha salva já foi carregada
   useEffect(() => {
@@ -361,13 +462,13 @@ export function Colinha() {
     );
   }
 
-  if (!carregado) {
+  if (!carregado || !presidenteCarregado || (!racaCarregada && !primeiraRacaPronta)) {
     return (
       <div className="pagina estreita">
         <div className="pagina-topo">
           <h1>Sua colinha</h1>
         </div>
-        <p className="muted">Carregando...</p>
+        <Loading texto="Carregando sua colinha..." variante="inline" />
       </div>
     );
   }
@@ -447,9 +548,24 @@ export function Colinha() {
         <div className="colinha-marca">
           <img className="marca-img" src="/capivara.png" alt="" /> Capivara Política
         </div>
-        {grupos.map((g) => (
-          <CartaoCargo key={g.chave} grupo={g} escolha={escolhaDe(g)} onMudar={(escolha) => mudar(g.chave, escolha)} />
-        ))}
+        {grupos.map((g) => {
+          // enquanto troca de estado, os cargos que dependem dele ficam com dado do estado
+          // anterior até a resposta nova chegar — melhor mostrar o loading do que o valor errado
+          if (g.cargo !== 'presidente' && !racaCarregada) return null;
+          const escolha = escolhaDe(g);
+          const opcao = escolha.candidatoId != null ? g.opcoes.find((o) => o.id === escolha.candidatoId) : undefined;
+          return (
+            <CartaoCargo
+              key={g.chave}
+              grupo={g}
+              escolha={escolha}
+              onMudar={(nova) => mudar(g.chave, nova)}
+              party={opcao?.partyId != null ? partidosPorId.get(opcao.partyId) : undefined}
+              pct={escolha.candidatoId != null ? pctPorId[escolha.candidatoId] : undefined}
+            />
+          );
+        })}
+        {!racaCarregada && <Loading texto="Atualizando candidatos do estado..." variante="inline" />}
       </div>
 
       {msg && <p className="aviso-msg">{msg}</p>}

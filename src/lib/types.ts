@@ -45,6 +45,7 @@ export interface Party {
   sigla: string;
   nome: string;
   logo: string | null;
+  candidatosCount: number;
 }
 
 export interface Candidate {
@@ -76,8 +77,7 @@ export type Pesquisa =
 
 export interface Data {
   parties: Party[];
-  candidates: Candidate[];
-  research: Pesquisa[];
+  researchPartidos: Extract<Pesquisa, { tipo: 'partido' }>[];
   quiz: QuizState;
 }
 

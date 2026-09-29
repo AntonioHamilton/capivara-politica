@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from './api.ts';
-import type { Data, Pesquisa, QuizState } from './types.ts';
+import type { Data, QuizState } from './types.ts';
 
 interface Store {
   data: Data;
@@ -34,14 +34,4 @@ export function useStore(): Store {
   const s = useContext(Ctx);
   if (!s) throw new Error('StoreProvider ausente');
   return s;
-}
-
-export function versoes(data: Data, tipo: 'candidato' | 'partido', id: number): Pesquisa[] {
-  return data.research.filter((r) => r.tipo === tipo && r.entidadeId === id);
-}
-
-export function pesquisaAtiva(data: Data, tipo: 'candidato', id: number): Extract<Pesquisa, { tipo: 'candidato' }> | undefined;
-export function pesquisaAtiva(data: Data, tipo: 'partido', id: number): Extract<Pesquisa, { tipo: 'partido' }> | undefined;
-export function pesquisaAtiva(data: Data, tipo: 'candidato' | 'partido', id: number): Pesquisa | undefined {
-  return versoes(data, tipo, id).find((r) => r.ativa);
 }
