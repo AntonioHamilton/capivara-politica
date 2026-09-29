@@ -12,13 +12,14 @@ const quizTemplate = () =>
 
 const listaPerguntas = (campo: 'candidato' | 'usuario') => PERGUNTAS.map((p) => `${p.id}: ${p[campo]}`).join('\n');
 
-const regrasComuns = `1. Pesquise na web. Prefira fontes oficiais (TSE, Câmara, Senado, assembleias, Portal da Transparência, sites do partido) e imprensa reconhecida.
+const regrasComuns = `1. Pesquise na web. Prefira fontes oficiais (TSE, Câmara, Senado, assembleias, Portal da Transparência, sites do partido, Plano de Governo registrado no TSE) e imprensa reconhecida.
 2. Não invente nada. Se não encontrar informação confiável, use null nos campos comuns e "sem_info" nas perguntas do quiz.
-3. Todo dado relevante precisa de pelo menos 1 URL em "fontes". Sem fonte, não afirme.
+3. Toda fonte precisa apontar para a matéria, página ou documento específico que comprova a informação — nunca a home genérica de um site (ex: "candidato.com.br" sozinho não vale como fonte; use a URL exata da notícia, proposta, decreto ou lei). Sem uma fonte específica para aquela alegação, não afirme.
 4. Seja neutro: descreva fatos e posições declaradas, sem opinar.
-5. "explicacao" tem no máximo 2 frases.
-6. Valores em reais são números (sem "R$" nem separador de milhar). Percentuais vão de 0 a 100.
-7. Responda somente com um bloco JSON válido, sem texto antes ou depois.`;
+5. "explicacao" tem no máximo 2 frases. Prefira sempre dar uma resposta ("sim" ou "nao") a deixar "sem_info" — mesmo uma inferência razoável (pela plataforma do partido, pela coligação, pelo padrão de votos em temas parecidos, por uma declaração antiga e não só da campanha atual) é mais útil que não responder. Deixe claro na explicação quando for inferência e não uma declaração direta. Use "sem_info" só quando não houver nenhum indício razoável, nem direto nem indireto.
+6. Valores em reais são números sem aspas (sem "R$" nem separador de milhar). Percentuais vão de 0 a 100. "numero_urna" é sempre string entre aspas, mesmo sendo um número (ex: "numero_urna": "13", nunca "numero_urna": 13).
+7. Use exatamente os nomes de campo do modelo JSON abaixo, sem trocar nem inventar nomes (ex: é "resumo" nas polêmicas, não "descricao").
+8. Responda somente com um bloco JSON válido, sem texto antes ou depois.`;
 
 export function promptCandidato(c: Candidate, partido: Party | undefined): string {
   const modelo = {
@@ -59,11 +60,12 @@ CANDIDATO
 
 REGRAS
 ${regrasComuns}
-8. No quiz, responda o que o CANDIDATO defende publicamente (votos, projetos, declarações e entrevistas), e não o que o partido defende.
-9. Só responda "sim" ou "nao" com evidência direta e citável (voto, projeto de lei, declaração, entrevista, livro ou plano de governo). Não deduza a posição pelo partido, pela profissão, pela ideologia ou pelo que é comum entre pessoas parecidas. Sem evidência direta, responda "sem_info". Prefira "sem_info" a chutar.
-10. Nas perguntas q25 e q26, a explicação deve citar exatamente o que o candidato defende do governo Lula e da família Bolsonaro.
-11. Corrupção e polêmicas só entram com fonte. Use status "condenado" apenas com condenação, "investigado" para investigação formal, "acusado" para denúncia e "noticia" para reportagem sem processo. Use categoria "corrupcao" quando envolver corrupção, desvio ou improbidade. Se não houver nenhuma, deixe a lista vazia.
-12. Quem nunca exerceu mandato não tem presença nem salário: use null nesses campos.
+9. No quiz, responda o que o CANDIDATO defende publicamente. Priorize sempre o que o próprio candidato disse ou fez (votos, projetos, decretos, leis sancionadas, entrevistas, declarações — de qualquer época da vida pública dele, não só da campanha de 2026 atual) sobre esse tema específico. Se o candidato ocupa ou já ocupou cargo eletivo, votos registrados e leis/decretos são a evidência mais forte.
+10. Quando não achar posição direta do candidato sobre o tema exato, é válido inferir pela plataforma oficial do partido/coligação, pelo padrão de votos em temas parecidos, ou pela linha que ele nunca contestou publicamente — deixe claro na "explicacao" que é uma inferência (ex: "não há declaração direta, mas o partido/a coligação defende X e ele nunca se posicionou contra"). Use "sem_info" só quando não houver nem evidência direta nem esse tipo de indício razoável.
+11. Antes de ir pergunta por pergunta, procure e leia o Plano de Governo do candidato registrado no TSE (busque "[nome do candidato] plano de governo TSE 2026" ou em tse.jus.br/eleicoes/eleicoes-2026-content/propostas-de-governo) e o site oficial de campanha. Isso costuma responder de uma vez várias perguntas de economia, segurança, educação e costumes, já com fonte oficial específica.
+12. Nas perguntas q25 e q26, a explicação deve citar exatamente o que o candidato defende do governo Lula e da família Bolsonaro.
+13. Corrupção e polêmicas só entram com fonte. Use status "condenado" apenas com condenação que ainda vale (não anulada/revertida), "investigado" para investigação formal, "acusado" para denúncia sem condenação vigente e "noticia" para reportagem sem processo. Use categoria "corrupcao" quando envolver corrupção, desvio ou improbidade. Se não houver nenhuma, deixe a lista vazia.
+14. Quem nunca exerceu mandato não tem presença nem salário: use null nesses campos.
 
 CAMPOS
 - situacao: "em_exercicio" (ocupa o cargo hoje), "candidato" (disputa 2026 sem ocupar o cargo) ou "ex_ocupante".
@@ -102,7 +104,7 @@ PARTIDO
 
 REGRAS
 ${regrasComuns}
-8. No quiz, responda o que o PARTIDO defende oficialmente (programa, estatuto, manifestos) e a orientação de voto da sua bancada no Congresso. Não use posições isoladas de um único filiado.
+9. No quiz, responda o que o PARTIDO defende oficialmente (programa, estatuto, manifestos) e a orientação de voto da sua bancada no Congresso. Não use posições isoladas de um único filiado.
 
 PERGUNTAS DO QUIZ (responda "sim", "nao" ou "sem_info")
 ${listaPerguntas('candidato').replaceAll('O candidato', 'O partido')}

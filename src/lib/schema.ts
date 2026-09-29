@@ -3,6 +3,29 @@ import { PERGUNTAS } from './questions.ts';
 
 const fontes = z.array(z.string()).default([]);
 
+// IAs volta e meia devolvem o número da urna como number em vez de string (é um campo que
+// "parece" numérico) — normaliza em vez de rejeitar, já que o valor em si está correto
+const numeroUrna = z.preprocess((v) => (typeof v === 'number' ? String(v) : v), z.string().nullish());
+
+// idem para "resumo" das polêmicas: as IAs às vezes usam "descricao" por analogia com propostas
+// (mesmo formato titulo+texto), então aceita os dois nomes em vez de perder o conteúdo
+const polemicaItem = z.preprocess(
+  (v) => {
+    if (v && typeof v === 'object' && !('resumo' in v) && 'descricao' in v) {
+      const { descricao, ...resto } = v as Record<string, unknown>;
+      return { ...resto, resumo: descricao };
+    }
+    return v;
+  },
+  z.object({
+    titulo: z.string(),
+    resumo: z.string().nullish(),
+    categoria: z.enum(['corrupcao', 'outra']).nullish(),
+    status: z.enum(['condenado', 'investigado', 'acusado', 'noticia']),
+    fontes,
+  }),
+);
+
 const respostaQuiz = z.object({
   resposta: z.enum(['sim', 'nao', 'sem_info']),
   explicacao: z.string().nullish(),
@@ -28,7 +51,7 @@ export const candidatoSchema = z
       idade: z.number().nullish(),
       situacao: z.enum(['em_exercicio', 'candidato', 'ex_ocupante']).nullish(),
       cargo_atual: z.string().nullish(),
-      numero_urna: z.string().nullish(),
+      numero_urna: numeroUrna,
       redes: z.record(z.string(), z.string().nullable()).nullish(),
       cargos_anteriores: z.array(z.string()).default([]),
       teve_cargo_publico_antes: z.boolean().nullish(),
@@ -70,17 +93,7 @@ export const candidatoSchema = z
         propostas: z.array(z.object({ titulo: z.string(), descricao: z.string().nullish(), fontes })).default([]),
       })
       .default({ propostas: [] }),
-    polemicas: z
-      .array(
-        z.object({
-          titulo: z.string(),
-          resumo: z.string().nullish(),
-          categoria: z.enum(['corrupcao', 'outra']).nullish(),
-          status: z.enum(['condenado', 'investigado', 'acusado', 'noticia']),
-          fontes,
-        }),
-      )
-      .default([]),
+    polemicas: z.array(polemicaItem).default([]),
     quiz,
   })
   .superRefine(exigirTodasAsPerguntas);
