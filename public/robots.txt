@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /esqueci-senha
+Disallow: /redefinir-senha
+Disallow: /colinha/
+
+Sitemap: https://capivara-politica.vercel.app/sitemap.xml
