@@ -17,18 +17,46 @@ const TAMANHO_PAGINA = 50;
 const ALTURA_SLOT = 96;
 const OVERSCAN = 8;
 
+const CHAVE_FILTROS = 'filtrosCandidatos';
+
+interface FiltrosSalvos {
+  cargo: string;
+  uf: string;
+  partido: string;
+  ordem: Ordem;
+  top3: boolean;
+}
+
+function filtrosSalvos(): Partial<FiltrosSalvos> {
+  try {
+    return JSON.parse(localStorage.getItem(CHAVE_FILTROS) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
 export function Lista() {
   const { data } = useStore();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [adicionando, setAdicionando] = useState(false);
-  const [cargo, setCargo] = useState('');
-  const [uf, setUf] = useState('');
-  const [partido, setPartido] = useState('');
+  const [cargo, setCargo] = useState(() => filtrosSalvos().cargo ?? '');
+  const [uf, setUf] = useState(() => filtrosSalvos().uf ?? '');
+  const [partido, setPartido] = useState(() => filtrosSalvos().partido ?? '');
   const [buscaCampo, setBuscaCampo] = useState('');
   const [busca, setBusca] = useState('');
-  const [ordem, setOrdem] = useState<Ordem>('compat');
-  const [top3, setTop3] = useState(false);
+  const [ordem, setOrdem] = useState<Ordem>(() => filtrosSalvos().ordem ?? 'compat');
+  const [top3, setTop3] = useState(() => filtrosSalvos().top3 ?? false);
+
+  // lembra os selects (cargo/estado/partido/ordem/top3) entre visitas — não inclui a busca por
+  // nome, que é mais transitória
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAVE_FILTROS, JSON.stringify({ cargo, uf, partido, ordem, top3 }));
+    } catch {
+      // sem armazenamento disponível, os filtros valem só nesta sessão
+    }
+  }, [cargo, uf, partido, ordem, top3]);
 
   const [itens, setItens] = useState<ItemCandidatoLista[]>([]);
   const [total, setTotal] = useState<number | null>(null);
