@@ -131,6 +131,43 @@ export function Landing() {
           </div>
         </Secao>
 
+        <Secao className="landing-secao">
+          <span className="landing-eyebrow">Guia do eleitor</span>
+          <h2>Eleições 2026: entenda a política do Brasil antes de votar</h2>
+          <p>
+            As eleições 2026 vão escolher o presidente da República, os governadores, os senadores e os deputados federais e
+            estaduais. Com tanta informação espalhada, a Capivara Política reúne em um só lugar o que cada candidato já votou, disse e
+            propôs, para você comparar com as suas próprias opiniões e decidir com mais segurança.
+          </p>
+          <div className="landing-cards">
+            <div className="card landing-card">
+              <h3>Candidatos à presidência do Brasil</h3>
+              <p className="muted">
+                Veja onde cada candidato à presidência se posiciona em economia, costumes, segurança e instituições, e quanto ele
+                combina com o seu perfil.
+              </p>
+            </div>
+            <div className="card landing-card">
+              <h3>Congresso Nacional</h3>
+              <p className="muted">
+                Compare quem disputa uma vaga de deputado federal ou senador — os que vão compor a Câmara e o Senado no Congresso
+                Nacional — com histórico, propostas e polêmicas.
+              </p>
+            </div>
+            <div className="card landing-card">
+              <h3>Fontes oficiais, como o TSE</h3>
+              <p className="muted">
+                As pesquisas priorizam fontes oficiais, como o TSE (incluindo os planos de governo registrados), a Câmara, o Senado e
+                o Portal da Transparência, e mostram o link de cada fonte.
+              </p>
+            </div>
+          </div>
+          <p className="muted">
+            A Capivara Política é independente: não tem ligação com o TSE, com partidos ou com candidatos, e não indica em quem votar.
+            Ela mostra o quanto cada candidato combina com o que você pensa.
+          </p>
+        </Secao>
+
         <Secao className="landing-secao landing-final">
           <h2>Pronto pra descobrir seu perfil?</h2>
           <Link to="/app?modo=registro" className="btn lg">
