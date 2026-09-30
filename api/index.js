@@ -106,6 +106,15 @@ await db.executeMultiple(`
     criado_em TEXT NOT NULL
   );
 
+  CREATE INDEX IF NOT EXISTS candidates_party ON candidates(party_id);
+
+  CREATE TABLE IF NOT EXISTS party_compat (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    party_id INTEGER NOT NULL,
+    dados TEXT NOT NULL,
+    PRIMARY KEY (user_id, party_id)
+  );
+
   CREATE TABLE IF NOT EXISTS colinhas (
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -569,16 +578,26 @@ async function listarTudoCompleto(userId) {
   )).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
   return { parties, candidates, research, quiz: await quizDoUsuario(userId) };
 }
-async function listarBootstrap(userId) {
-  const parties = await all(
-    `SELECT p.id, p.sigla, p.nome, p.logo, (SELECT COUNT(*) FROM candidates c WHERE c.party_id = p.id) AS candidatosCount
-     FROM parties p ORDER BY p.sigla`
+async function compatDosPartidos(userId, quiz) {
+  const guardadas = await all("SELECT party_id AS partyId, dados FROM party_compat WHERE user_id = ?", [userId]);
+  const mapa = new Map(guardadas.map((g) => [g.partyId, JSON.parse(g.dados)]));
+  const pesquisas = await all(
+    "SELECT entidade_id AS entidadeId, dados FROM research WHERE tipo = 'partido' AND ativa = 1"
   );
-  const researchPartidos = (await all(
-    `SELECT id, tipo, entidade_id AS entidadeId, criado_em AS criadoEm, ativa, dados
-       FROM research WHERE tipo = 'partido' ORDER BY id DESC`
-  )).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
-  return { parties, researchPartidos, quiz: await quizDoUsuario(userId) };
+  for (const p of pesquisas) {
+    if (mapa.has(p.entidadeId)) continue;
+    const compat = compatibilidade(quiz, JSON.parse(p.dados).quiz);
+    mapa.set(p.entidadeId, compat);
+    await run("INSERT OR REPLACE INTO party_compat (user_id, party_id, dados) VALUES (?, ?, ?)", [userId, p.entidadeId, JSON.stringify(compat)]);
+  }
+  return mapa;
+}
+async function pesquisaAtivaDoPartido(partyId) {
+  const r = await get(
+    "SELECT id, criado_em AS criadoEm, dados FROM research WHERE tipo = 'partido' AND entidade_id = ? AND ativa = 1",
+    [partyId]
+  );
+  return r ? { id: r.id, tipo: "partido", entidadeId: partyId, criadoEm: r.criadoEm, ativa: true, dados: JSON.parse(r.dados) } : void 0;
 }
 var chaveGrupo = (cargo, uf) => `${cargo}:${uf}`;
 function montarItensRankeados(linhas, quiz) {
@@ -813,12 +832,39 @@ api.get("/feedback", exigirAdmin, async (_req, res) => {
   res.json(lista);
 });
 api.get("/data", async (req, res) => {
-  res.json(await listarBootstrap(usuario(req).userId));
+  res.json({ quiz: await quizDoUsuario(usuario(req).userId) });
 });
 api.get("/contagens", exigirAdmin, async (_req, res) => {
   const candidatos = (await get("SELECT COUNT(*) AS n FROM candidates")).n;
   const pesquisas = (await get("SELECT COUNT(*) AS n FROM research")).n;
-  res.json({ candidatos, pesquisas });
+  const partidos = (await get("SELECT COUNT(*) AS n FROM parties")).n;
+  res.json({ candidatos, pesquisas, partidos });
+});
+api.get("/partidos", async (req, res) => {
+  const userId = usuario(req).userId;
+  const [partidos, contagens, compats] = await Promise.all([
+    all("SELECT id, sigla, nome, logo FROM parties ORDER BY sigla"),
+    all("SELECT party_id AS partyId, COUNT(*) AS n FROM candidates WHERE party_id IS NOT NULL GROUP BY party_id"),
+    quizDoUsuario(userId).then((quiz) => compatDosPartidos(userId, quiz))
+  ]);
+  const porPartido = new Map(contagens.map((c) => [c.partyId, c.n]));
+  res.json(
+    partidos.map((p) => ({ ...p, candidatosCount: porPartido.get(p.id) ?? 0, compat: compats.get(p.id) ?? null, pesquisado: compats.has(p.id) }))
+  );
+});
+api.get("/partidos-opcoes", async (_req, res) => {
+  res.json(await all("SELECT id, sigla, nome, logo FROM parties ORDER BY sigla"));
+});
+api.get("/partidos/:id", async (req, res) => {
+  const id = idParam(req);
+  const party = await get(
+    "SELECT p.id, p.sigla, p.nome, p.logo, (SELECT COUNT(*) FROM candidates c WHERE c.party_id = p.id) AS candidatosCount FROM parties p WHERE p.id = ?",
+    [id]
+  );
+  if (!party) throw new HttpError(404, "Partido n\xE3o encontrado");
+  const userId = usuario(req).userId;
+  const compats = await compatDosPartidos(userId, await quizDoUsuario(userId));
+  res.json({ party, pesquisa: await pesquisaAtivaDoPartido(id), compat: compats.get(id) ?? null });
 });
 var LIMITE_CALCULO_COMPLETO = 1500;
 api.get("/candidatos", async (req, res) => {
@@ -1043,6 +1089,7 @@ api.delete("/parties/:id", exigirAdmin, async (req, res) => {
   if (uso.n > 0) throw new HttpError(409, "H\xE1 candidatos usando este partido. Remova ou troque o partido deles antes.");
   await transaction(async (t) => {
     await t.run("DELETE FROM research WHERE tipo = 'partido' AND entidade_id = ?", [id]);
+    await t.run("DELETE FROM party_compat WHERE party_id = ?", [id]);
     await t.run("DELETE FROM parties WHERE id = ?", [id]);
   });
   res.json({ ok: true });
@@ -1096,6 +1143,7 @@ api.post("/research", exigirAdmin, async (req, res) => {
       (/* @__PURE__ */ new Date()).toISOString(),
       JSON.stringify(req.body.dados)
     ]);
+    if (tipo === "partido") await t.run("DELETE FROM party_compat WHERE party_id = ?", [entidadeId]);
     return Number(r.lastInsertRowid);
   });
   if (tipo === "candidato") invalidarCacheColinha();
@@ -1108,6 +1156,7 @@ api.post("/research/:id/activate", exigirAdmin, async (req, res) => {
   await transaction(async (t) => {
     await t.run("UPDATE research SET ativa = 0 WHERE tipo = ? AND entidade_id = ?", [r.tipo, r.entidadeId]);
     await t.run("UPDATE research SET ativa = 1 WHERE id = ?", [id]);
+    if (r.tipo === "partido") await t.run("DELETE FROM party_compat WHERE party_id = ?", [r.entidadeId]);
   });
   if (r.tipo === "candidato") invalidarCacheColinha();
   res.json({ ok: true });
@@ -1129,6 +1178,7 @@ api.delete("/research/:id", exigirAdmin, async (req, res) => {
         [r.tipo, r.entidadeId]
       );
     }
+    if (r.tipo === "partido") await t.run("DELETE FROM party_compat WHERE party_id = ?", [r.entidadeId]);
   });
   if (r.tipo === "candidato") invalidarCacheColinha();
   res.json({ ok: true });
@@ -1141,6 +1191,7 @@ api.put("/quiz", async (req, res) => {
       eticaEliminatoria: req.body.eticaEliminatoria ?? null
     })
   ]);
+  await run("DELETE FROM party_compat WHERE user_id = ?", [usuario(req).userId]);
   res.json({ ok: true });
 });
 api.get("/colinha", async (req, res) => {
@@ -1175,6 +1226,7 @@ api.post("/import", exigirAdmin, async (req, res) => {
   const userId = usuario(req).userId;
   await transaction(async (t) => {
     await t.run("DELETE FROM research");
+    await t.run("DELETE FROM party_compat");
     await t.run("DELETE FROM candidates");
     await t.run("DELETE FROM parties");
     for (const p of b.parties) {
