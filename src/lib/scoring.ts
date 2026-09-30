@@ -79,7 +79,9 @@ export function posicaoNosEixos(quiz: QuizState): Record<Eixo, number | null> {
     let soma = 0;
     let n = 0;
     for (const p of PERGUNTAS) {
-      if (p.eixo !== eixo) continue;
+      // o espectro esquerda-direita considera todas as respostas (não só as 6 de alinhamento),
+      // para ficar coerente com os outros eixos mesmo quando o TypeSafe não está disponível
+      if (p.eixo !== eixo && eixo !== 'alinhamento') continue;
       const r = quiz.respostas[p.id];
       if (!r || r.r === 'pular') continue;
       soma += p.sinal * (r.r === 'sim' ? 1 : -1);

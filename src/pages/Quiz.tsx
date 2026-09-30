@@ -63,7 +63,7 @@ export function Quiz() {
           <div style={{ width: `${(passo / PERGUNTAS.length) * 100}%` }} />
         </div>
 
-        <div className="card quiz-card">
+        <div className="card quiz-card" key={p.id}>
           <h2>{p.usuario}</h2>
           <div className="quiz-botoes">
             <button className={`btn grande${atual?.r === 'sim' ? ' marcado' : ''}`} onClick={() => responder('sim')}>
@@ -139,7 +139,7 @@ function Resultado({ onRefazer, onRevisar }: { onRefazer: () => void; onRevisar:
   }, []);
   const posicoes = posicaoNosEixos(data.quiz);
   // o espectro político vem da média do julgamento de todas as respostas (respostas "Não sei" ficam de
-  // fora); enquanto a tabela não chega completa, vale o cálculo antigo, só das perguntas de alinhamento
+  // fora); enquanto a tabela não chega completa, vale a média simples de todas as respostas pelo sinal de cada pergunta
   if (tabelaEspectro && Object.keys(tabelaEspectro).length === PERGUNTAS.length) {
     posicoes.alinhamento = espectroDoUsuario(data.quiz, tabelaEspectro);
   }

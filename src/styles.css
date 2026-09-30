@@ -229,8 +229,10 @@ p {
   transition: background 0.15s, border-color 0.15s;
 }
 
-.btn:hover:not(:disabled) {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
 }
 
 .btn:disabled {
@@ -276,9 +278,13 @@ p {
   border-color: var(--border);
 }
 
-.btn.grande:not(.marcado):hover {
-  background: var(--accent);
-  color: var(--on-accent);
+/* só em dispositivos com mouse: no toque o :hover fica "grudado" no botão tocado e a próxima
+   pergunta apareceria com a resposta anterior destacada */
+@media (hover: hover) {
+  .btn.grande:not(.marcado):hover {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
 }
 
 .btn-icone {
@@ -1440,12 +1446,20 @@ textarea:focus {
     align-items: flex-start;
   }
 
+  /* nomes dos dois extremos na linha de cima (um em cada ponta) e a barra embaixo */
   .eixo-barra {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem 0.6rem;
+  }
+
+  .eixo-barra .trilho {
+    grid-row: 2;
+    grid-column: 1 / -1;
   }
 
   .eixo-barra span:last-child {
-    text-align: left;
+    grid-row: 1;
+    grid-column: 2;
   }
 
   .grade-2 {
