@@ -120,6 +120,12 @@ await db.executeMultiple(`
     PRIMARY KEY (user_id, party_id)
   );
 
+  CREATE TABLE IF NOT EXISTS espectro_respostas (
+    chave TEXT PRIMARY KEY,
+    assinatura TEXT NOT NULL,
+    score REAL NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS colinhas (
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,

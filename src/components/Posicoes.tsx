@@ -34,6 +34,7 @@ export function Posicoes({
                   <span className="pergunta">{texto}</span>
                   <span className="chips">
                     <span className={`chip resp-${a?.resposta ?? 'sem_info'}`}>{ROTULO[a?.resposta ?? 'sem_info']}</span>
+                    {u?.r === 'pular' && <span className="chip voce">Você: Não sei</span>}
                     {voce && (
                       <span className={`chip voce ${comparavel ? (concorda ? 'concorda' : 'diverge') : ''}`}>
                         Você: {voce.r === 'sim' ? 'Sim' : 'Não'}

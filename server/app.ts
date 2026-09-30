@@ -22,6 +22,7 @@ import {
 import { emailRecuperacaoHtml, enviarEmail } from './email.ts';
 import { compatibilidade } from '../src/lib/scoring.ts';
 import type { Compat } from '../src/lib/scoring.ts';
+import { tabelaEspectro } from './espectro.ts';
 import type { QuizState } from '../src/lib/types.ts';
 
 const PORT = Number(process.env.PORT ?? 4310);
@@ -395,6 +396,11 @@ api.get('/feedback', exigirAdmin, async (_req, res) => {
      ORDER BY f.id DESC`,
   );
   res.json(lista);
+});
+
+// posição de esquerda/centro/direita de cada resposta do quiz (julgada pelo TypeSafe e guardada)
+api.get('/espectro-respostas', async (_req, res) => {
+  res.json(await tabelaEspectro());
 });
 
 api.get('/data', async (req, res) => {

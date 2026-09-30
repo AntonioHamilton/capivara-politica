@@ -6,7 +6,7 @@ try {
 
 // server/app.ts
 import express from "express";
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 
 // server/db.ts
 import { createClient } from "@libsql/client";
@@ -113,6 +113,12 @@ await db.executeMultiple(`
     party_id INTEGER NOT NULL,
     dados TEXT NOT NULL,
     PRIMARY KEY (user_id, party_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS espectro_respostas (
+    chave TEXT PRIMARY KEY,
+    assinatura TEXT NOT NULL,
+    score REAL NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS colinhas (
@@ -536,6 +542,72 @@ function compatibilidade(quiz, alvo, polemicas = []) {
   };
 }
 
+// server/espectro.ts
+import crypto2 from "node:crypto";
+
+// src/lib/espectro.ts
+var CONTEXTO_ESPECTRO = "Question\xE1rio de posicionamento pol\xEDtico de eleitores brasileiros, em 2026. No Brasil, a esquerda \xE9 o campo do PT e do governo Lula (mais Estado, redistribui\xE7\xE3o, pautas progressistas, garantismo penal). A direita \xE9 o campo bolsonarista, liberal e conservador (menos Estado e impostos, valores conservadores, rigor penal, armas, cr\xEDticas ao STF, defesa de Bolsonaro e da anistia aos condenados de 8 de janeiro, alinhamento com os EUA). Classifique a posi\xE7\xE3o que a resposta representa nesse debate, n\xE3o o que \xE9 moralmente certo.";
+var NIVEIS_ESPECTRO = [
+  "Posi\xE7\xE3o de esquerda: defende mais Estado, redistribui\xE7\xE3o, pautas progressistas ou o campo pol\xEDtico de esquerda",
+  "Posi\xE7\xE3o de centro: n\xE3o se associa claramente \xE0 esquerda nem \xE0 direita, ou \xE9 consenso entre os dois campos",
+  "Posi\xE7\xE3o de direita: defende mercado livre, valores conservadores, rigor penal ou o campo pol\xEDtico de direita"
+];
+function instrucaoEspectro(p, resposta) {
+  return `Um eleitor brasileiro respondeu "${resposta === "sim" ? "Sim" : "N\xE3o"}" \xE0 pergunta: "${p.usuario}". No debate pol\xEDtico brasileiro atual, essa resposta \xE9 uma posi\xE7\xE3o de esquerda, de centro ou de direita?`;
+}
+
+// server/espectro.ts
+var RESPOSTAS = ["sim", "nao"];
+var ESPERA_APOS_FALHA_MS = 6e4;
+var proximaTentativa = 0;
+var assinatura = (instrucao) => crypto2.createHash("sha1").update(JSON.stringify([CONTEXTO_ESPECTRO, NIVEIS_ESPECTRO, instrucao])).digest("hex");
+async function julgar(pendentes) {
+  const r = await fetch("https://api.typesafe.ai/v1/systemone", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.TYPESAFE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "jev-latest",
+      state: { contexto: CONTEXTO_ESPECTRO },
+      questions: Object.fromEntries(pendentes.map((p) => [p.chave, { type: "score", instructions: p.instrucao, criteria: NIVEIS_ESPECTRO }]))
+    })
+  });
+  if (!r.ok) throw new Error(`TypeSafe respondeu ${r.status}`);
+  const j = await r.json();
+  return Object.fromEntries(pendentes.map((p) => [p.chave, j.answers[p.chave].score]));
+}
+async function tabelaEspectro() {
+  const guardados = await all("SELECT chave, assinatura, score FROM espectro_respostas");
+  const porChave = new Map(guardados.map((g) => [g.chave, g]));
+  const pendentes = [];
+  for (const p of PERGUNTAS) {
+    for (const resposta of RESPOSTAS) {
+      const chave = `${p.id}_${resposta}`;
+      const instrucao = instrucaoEspectro(p, resposta);
+      const ass = assinatura(instrucao);
+      if (porChave.get(chave)?.assinatura !== ass) pendentes.push({ chave, instrucao, assinatura: ass });
+    }
+  }
+  if (pendentes.length && process.env.TYPESAFE_API_KEY && Date.now() >= proximaTentativa) {
+    try {
+      const scores = await julgar(pendentes);
+      for (const p of pendentes) {
+        await run("INSERT OR REPLACE INTO espectro_respostas (chave, assinatura, score) VALUES (?, ?, ?)", [p.chave, p.assinatura, scores[p.chave]]);
+        porChave.set(p.chave, { chave: p.chave, assinatura: p.assinatura, score: scores[p.chave] });
+      }
+    } catch (e) {
+      console.error("Falha ao consultar o TypeSafe:", e);
+      proximaTentativa = Date.now() + ESPERA_APOS_FALHA_MS;
+    }
+  }
+  const tabela = {};
+  for (const p of PERGUNTAS) {
+    const sim = porChave.get(`${p.id}_sim`);
+    const nao = porChave.get(`${p.id}_nao`);
+    if (sim && nao) tabela[p.id] = { sim: sim.score, nao: nao.score };
+  }
+  return tabela;
+}
+
 // server/app.ts
 var PORT = Number(process.env.PORT ?? 4310);
 var PUBLIC_URL2 = process.env.PUBLIC_URL ?? `http://localhost:${PORT}`;
@@ -702,7 +774,7 @@ api.post("/auth/google", async (req, res) => {
     while (await get("SELECT id FROM users WHERE username = ?", [username])) {
       username = `${base}${++sufixo}`;
     }
-    const senhaAleatoria = hashSenha(crypto2.randomBytes(32).toString("hex"));
+    const senhaAleatoria = hashSenha(crypto3.randomBytes(32).toString("hex"));
     const novo = await run("INSERT INTO users (username, email, password_hash, is_admin, criado_em) VALUES (?, ?, ?, ?, ?)", [
       username,
       email,
@@ -820,6 +892,9 @@ api.get("/feedback", exigirAdmin, async (_req, res) => {
      ORDER BY f.id DESC`
   );
   res.json(lista);
+});
+api.get("/espectro-respostas", async (_req, res) => {
+  res.json(await tabelaEspectro());
 });
 api.get("/data", async (req, res) => {
   res.json({ quiz: await quizDoUsuario(usuario(req).userId) });
@@ -1232,7 +1307,7 @@ api.put("/colinha", async (req, res) => {
   if (!Array.isArray(req.body.itens)) throw new HttpError(400, "Itens inv\xE1lidos");
   const userId = usuario(req).userId;
   const existente = await get("SELECT token FROM colinhas WHERE user_id = ?", [userId]);
-  const token = existente?.token ?? crypto2.randomUUID();
+  const token = existente?.token ?? crypto3.randomUUID();
   await run(
     `INSERT INTO colinhas (token, user_id, itens, atualizado_em) VALUES (?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET itens = excluded.itens, atualizado_em = excluded.atualizado_em`,

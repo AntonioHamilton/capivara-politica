@@ -39,7 +39,6 @@ function TemaToggle() {
 
 function UserMenu() {
   const { user, logout } = useAuth();
-  const { data } = useStore();
   const [aberto, setAberto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -83,11 +82,6 @@ function UserMenu() {
           <NavLink to="/app/conta" role="menuitem" onClick={() => setAberto(false)}>
             Conta
           </NavLink>
-          {quizCompleto(data.quiz) && (
-            <NavLink to="/app/feedback" role="menuitem" onClick={() => setAberto(false)}>
-              Feedback
-            </NavLink>
-          )}
           <button
             type="button"
             role="menuitem"
@@ -119,6 +113,7 @@ function Topo({ menuAberto, setMenuAberto }: { menuAberto: boolean; setMenuAbert
           </NavLink>
           <NavLink to="/app/partidos">Partidos</NavLink>
           {quizCompleto(data.quiz) && <NavLink to="/app/colinha">Colinha</NavLink>}
+          {quizCompleto(data.quiz) && <NavLink to="/app/feedback">Feedback</NavLink>}
           {user.isAdmin && <NavLink to="/app/dados">Dados</NavLink>}
         </nav>
         <TemaToggle />

@@ -1,5 +1,6 @@
 import type { Candidate, Cargo, Data, Party, Pesquisa, QuizState } from './types.ts';
 import type { Compat } from './scoring.ts';
+import type { TabelaEspectro } from './espectro.ts';
 import { cacheado, invalidarCache, invalidarCandidatos } from './cache.ts';
 import type { GrupoCandidatos } from './cache.ts';
 
@@ -233,6 +234,7 @@ export const api = {
   colinhaPublica: (token: string) => req<ColinhaPublica>('/api/colinha/' + token),
   candidatos: (f: FiltrosCandidatos = {}) =>
     cacheado('candidatos:' + querystring(f), () => req<ListaCandidatos>('/api/candidatos' + querystring(f))),
+  espectroRespostas: () => cacheado('espectro', () => req<TabelaEspectro>('/api/espectro-respostas'), 60 * 60_000),
   partidos: () => cacheado('partidos', () => req<PartidoLista[]>('/api/partidos')),
   partido: (id: number) => cacheado('partido:' + id, () => req<PartidoDetalhe>('/api/partidos/' + id)),
   partidosOpcoes: () => cacheado('partidos-opcoes', () => req<PartidoOpcao[]>('/api/partidos-opcoes')),

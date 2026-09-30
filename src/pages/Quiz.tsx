@@ -4,6 +4,8 @@ import { Icon } from '../components/ui.tsx';
 import { EIXOS, ORDEM_EIXOS, PERGUNTAS, PERGUNTA_ETICA } from '../lib/questions.ts';
 import { api } from '../lib/api.ts';
 import type { PartidoLista } from '../lib/api.ts';
+import { espectroDoUsuario } from '../lib/espectro.ts';
+import type { TabelaEspectro } from '../lib/espectro.ts';
 import { posicaoNosEixos, totalComResposta } from '../lib/scoring.ts';
 import { useStore } from '../lib/store.tsx';
 import type { RespostaUsuario } from '../lib/types.ts';
@@ -67,6 +69,9 @@ export function Quiz() {
             <button className={`btn grande${atual?.r === 'sim' ? ' marcado' : ''}`} onClick={() => responder('sim')}>
               Sim
             </button>
+            <button className={`btn grande${atual?.r === 'pular' ? ' marcado' : ''}`} onClick={() => responder('pular')}>
+              Não sei
+            </button>
             <button className={`btn grande${atual?.r === 'nao' ? ' marcado' : ''}`} onClick={() => responder('nao')}>
               Não
             </button>
@@ -76,6 +81,7 @@ export function Quiz() {
           </button>
           <p className="muted pequeno-texto">
             Marque a estrela antes de responder. Candidatos que discordarem de você nesta pergunta ficam com o selo de conflito.
+            Se não souber ou o tema não importa para você, marque Não sei: a pergunta não entra no seu perfil nem na compatibilidade.
           </p>
         </div>
 
@@ -83,7 +89,7 @@ export function Quiz() {
           <button className="btn texto" disabled={passo === 0} onClick={() => setPasso(passo - 1)}>
             <Icon name="back" size={16} /> Voltar
           </button>
-          <button className="btn texto" onClick={() => responder('pular')}>
+          <button className="btn texto" onClick={() => setPasso(passo + 1)}>
             Próxima
           </button>
         </div>
@@ -127,7 +133,16 @@ function Resultado({ onRefazer, onRevisar }: { onRefazer: () => void; onRevisar:
   useEffect(() => {
     api.partidos().then(setPartidos);
   }, []);
+  const [tabelaEspectro, setTabelaEspectro] = useState<TabelaEspectro | null>(null);
+  useEffect(() => {
+    api.espectroRespostas().then(setTabelaEspectro).catch(() => {});
+  }, []);
   const posicoes = posicaoNosEixos(data.quiz);
+  // o espectro político vem da média do julgamento de todas as respostas (respostas "Não sei" ficam de
+  // fora); enquanto a tabela não chega completa, vale o cálculo antigo, só das perguntas de alinhamento
+  if (tabelaEspectro && Object.keys(tabelaEspectro).length === PERGUNTAS.length) {
+    posicoes.alinhamento = espectroDoUsuario(data.quiz, tabelaEspectro);
+  }
   const ranking = (partidos ?? [])
     .filter((p) => p.compat?.pct != null)
     .sort((a, b) => b.compat!.pct! - a.compat!.pct!)
