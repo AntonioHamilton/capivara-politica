@@ -11,7 +11,7 @@ import { CARGOS, UFS } from '../lib/types.ts';
 
 type Ordem = 'compat' | 'nome';
 
-const TAMANHO_PAGINA = 50;
+const TAMANHO_PAGINA = 20;
 // altura aproximada de cada linha (com a folga do gap) — usada só pra decidir o que renderizar,
 // uma pequena imprecisão aqui não quebra nada, só ajusta a margem de segurança (overscan)
 const ALTURA_SLOT = 96;
