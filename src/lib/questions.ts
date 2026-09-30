@@ -157,13 +157,13 @@ export const PERGUNTAS: Pergunta[] = [
     'O candidato defende que o Congresso possa anular decisões do STF?',
   ),
 
-  q('q25', 'alinhamento', -1, 'Você apoia o governo Lula?', 'O candidato apoia o governo Lula? (cite o que defende do governo)'),
+  q('q25', 'alinhamento', -1, 'Você apoia o Lula?', 'O candidato apoia o Lula? (cite em que o apoia ou critica)'),
   q(
     'q26',
     'alinhamento',
     1,
-    'Você defende as pautas da família Bolsonaro?',
-    'O candidato defende pautas ou ações da família Bolsonaro? (cite o que defende)',
+    'Você apoia o Bolsonaro?',
+    'O candidato apoia o Bolsonaro? (cite em que o apoia ou critica)',
   ),
   q(
     'q27',
