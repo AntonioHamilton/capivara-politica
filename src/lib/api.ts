@@ -1,8 +1,14 @@
 import type { Candidate, Cargo, Data, Party, Pesquisa, QuizState } from './types.ts';
 import type { Compat } from './scoring.ts';
-import { cacheado, invalidarCache } from './cache.ts';
+import { cacheado, invalidarCache, invalidarCandidatos } from './cache.ts';
+import type { GrupoCandidatos } from './cache.ts';
+
+// salvamento do quiz em andamento: leituras esperam por ele, senão o servidor poderia calcular
+// compatibilidade (e guardá-la) com o quiz antigo
+let quizPendente: Promise<unknown> = Promise.resolve();
 
 async function req<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
+  if (method === 'GET') await quizPendente.catch(() => {});
   const r = await fetch(url, {
     method,
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
@@ -118,6 +124,21 @@ export interface OpcaoColinha {
   numeroUrna: string | null;
 }
 
+// card da tela de Partidos: só o que ele mostra, com a compatibilidade já calculada no servidor
+export interface PartidoLista extends Party {
+  compat: Compat | null;
+  pesquisado: boolean;
+}
+
+export interface PartidoDetalhe {
+  party: Party;
+  pesquisa: Extract<Pesquisa, { tipo: 'partido' }> | undefined;
+  compat: Compat | null;
+}
+
+// opção leve de partido (select de filtro, formulário de candidato, colinha)
+export type PartidoOpcao = Pick<Party, 'id' | 'sigla' | 'nome' | 'logo'>;
+
 export interface MelhorCandidato {
   id: number;
   pct: number;
@@ -138,8 +159,7 @@ function querystring(f: object): string {
   return s ? `?${s}` : '';
 }
 
-// mutações que podem mudar o resultado de uma lista já cacheada (candidatos, opções/melhores
-// da Colinha) — limpam o cache inteiro do cliente pra próxima busca vir atualizada
+// mutações que mudam o quiz ou todos os dados (import de backup) — limpam o cache inteiro
 function semCache<T>(p: Promise<T>): Promise<T> {
   return p.then((r) => {
     invalidarCache();
@@ -147,19 +167,57 @@ function semCache<T>(p: Promise<T>): Promise<T> {
   });
 }
 
+function invalidarPesquisa(tipo: 'candidato' | 'partido', grupo?: GrupoCandidatos) {
+  if (tipo === 'partido') invalidarCache('partido');
+  else invalidarCandidatos(...(grupo ? [grupo] : []));
+}
+
+function aposMutar<T>(p: Promise<T>, invalidar: () => void): Promise<T> {
+  return p.then((r) => {
+    invalidar();
+    return r;
+  });
+}
+
+// partido editado/removido aparece embutido nas listas de candidatos — sai junto delas
+function invalidarPartidos(comCandidatos: boolean) {
+  invalidarCache('partido');
+  if (comCandidatos) invalidarCandidatos();
+}
+
 export const api = {
   data: () => req<Data>('/api/data'),
-  addParty: (p: PartidoInput) => semCache(req<{ id: number }>('/api/parties', 'POST', p)),
-  updateParty: (id: number, p: PartidoInput) => semCache(req('/api/parties/' + id, 'PUT', p)),
-  deleteParty: (id: number) => semCache(req('/api/parties/' + id, 'DELETE')),
-  addCandidate: (c: CandidatoInput) => semCache(req<{ id: number }>('/api/candidates', 'POST', c)),
-  updateCandidate: (id: number, c: CandidatoInput) => semCache(req('/api/candidates/' + id, 'PUT', c)),
-  deleteCandidate: (id: number) => semCache(req('/api/candidates/' + id, 'DELETE')),
-  saveResearch: (tipo: 'candidato' | 'partido', entidadeId: number, dados: unknown) =>
-    semCache(req('/api/research', 'POST', { tipo, entidadeId, dados })),
-  activateResearch: (id: number) => semCache(req(`/api/research/${id}/activate`, 'POST')),
-  deleteResearch: (id: number) => semCache(req('/api/research/' + id, 'DELETE')),
-  saveQuiz: (q: QuizState) => semCache(req('/api/quiz', 'PUT', q)),
+  addParty: (p: PartidoInput) => aposMutar(req<{ id: number }>('/api/parties', 'POST', p), () => invalidarPartidos(false)),
+  updateParty: (id: number, p: PartidoInput) => aposMutar(req('/api/parties/' + id, 'PUT', p), () => invalidarPartidos(true)),
+  deleteParty: (id: number) => aposMutar(req('/api/parties/' + id, 'DELETE'), () => invalidarPartidos(true)),
+  addCandidate: (c: CandidatoInput) =>
+    aposMutar(req<{ id: number }>('/api/candidates', 'POST', c), () => {
+      invalidarCache('partido');
+      invalidarCandidatos({ cargo: c.cargo, uf: c.uf });
+    }),
+  // `anterior` é o grupo (cargo+uf) que o candidato tinha antes da edição, se mudou de corrida
+  updateCandidate: (id: number, c: CandidatoInput, anterior?: GrupoCandidatos) =>
+    aposMutar(req('/api/candidates/' + id, 'PUT', c), () => {
+      invalidarCache('partido');
+      invalidarCandidatos({ cargo: c.cargo, uf: c.uf }, ...(anterior ? [anterior] : []));
+    }),
+  deleteCandidate: (id: number, grupo?: GrupoCandidatos) =>
+    aposMutar(req('/api/candidates/' + id, 'DELETE'), () => {
+      invalidarCache('partido');
+      invalidarCandidatos(...(grupo ? [grupo] : []));
+    }),
+  // pesquisa de partido só afeta as telas de partido; a de candidato afeta as listas do grupo dele
+  saveResearch: (tipo: 'candidato' | 'partido', entidadeId: number, dados: unknown, grupo?: GrupoCandidatos) =>
+    aposMutar(req('/api/research', 'POST', { tipo, entidadeId, dados }), () => invalidarPesquisa(tipo, grupo)),
+  activateResearch: (id: number, tipo: 'candidato' | 'partido', grupo?: GrupoCandidatos) =>
+    aposMutar(req(`/api/research/${id}/activate`, 'POST'), () => invalidarPesquisa(tipo, grupo)),
+  deleteResearch: (id: number, tipo: 'candidato' | 'partido', grupo?: GrupoCandidatos) =>
+    aposMutar(req('/api/research/' + id, 'DELETE'), () => invalidarPesquisa(tipo, grupo)),
+  saveQuiz: (q: QuizState) => {
+    const salvando = semCache(req('/api/quiz', 'PUT', q));
+    quizPendente = salvando;
+    return salvando;
+  },
   importAll: (backup: unknown) => semCache(req('/api/import', 'POST', backup)),
   listUsers: () => req<UsuarioInfo[]>('/api/admin/users'),
   createAdmin: (u: NovoAdminInput) => req<UsuarioInfo>('/api/admin/users', 'POST', u),
@@ -171,10 +229,13 @@ export const api = {
   colinhaPublica: (token: string) => req<ColinhaPublica>('/api/colinha/' + token),
   candidatos: (f: FiltrosCandidatos = {}) =>
     cacheado('candidatos:' + querystring(f), () => req<ListaCandidatos>('/api/candidatos' + querystring(f))),
+  partidos: () => cacheado('partidos', () => req<PartidoLista[]>('/api/partidos')),
+  partido: (id: number) => cacheado('partido:' + id, () => req<PartidoDetalhe>('/api/partidos/' + id)),
+  partidosOpcoes: () => cacheado('partidos-opcoes', () => req<PartidoOpcao[]>('/api/partidos-opcoes')),
   candidato: (id: number) => req<ItemCandidatoDetalhe>('/api/candidatos/' + id),
   researchVersoes: (tipo: 'candidato' | 'partido', entidadeId: number) =>
     req<Pesquisa[]>('/api/research' + querystring({ tipo, entidadeId })),
-  contagens: () => req<{ candidatos: number; pesquisas: number }>('/api/contagens'),
+  contagens: () => req<{ candidatos: number; pesquisas: number; partidos: number }>('/api/contagens'),
   colinhaOpcoes: (f: { cargo?: string; uf?: string } = {}) =>
     cacheado('colinha-opcoes:' + querystring(f), () => req<OpcaoColinha[]>('/api/colinha-opcoes' + querystring(f)), 5 * 60_000),
   colinhaMelhores: (uf: string) =>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../lib/api.ts';
+import type { GrupoCandidatos } from '../lib/cache.ts';
 import { lerPesquisa, promptCorrecao } from '../lib/prompt.ts';
-import { useStore } from '../lib/store.tsx';
 import { Icon, Modal } from './ui.tsx';
 
 interface Props {
@@ -9,12 +9,12 @@ interface Props {
   entidadeId: number;
   titulo: string;
   prompt: string;
+  grupo?: GrupoCandidatos;
   onClose: () => void;
   onSaved?: () => void;
 }
 
-export function ResearchModal({ tipo, entidadeId, titulo, prompt, onClose, onSaved }: Props) {
-  const { refresh } = useStore();
+export function ResearchModal({ tipo, entidadeId, titulo, prompt, grupo, onClose, onSaved }: Props) {
   const [texto, setTexto] = useState('');
   const [erros, setErros] = useState<string[]>([]);
   const [copiado, setCopiado] = useState<string | null>(null);
@@ -39,8 +39,7 @@ export function ResearchModal({ tipo, entidadeId, titulo, prompt, onClose, onSav
     setErros([]);
     setSalvando(true);
     try {
-      await api.saveResearch(tipo, entidadeId, r.dados);
-      if (tipo === 'partido') await refresh();
+      await api.saveResearch(tipo, entidadeId, r.dados, grupo);
       onSaved?.();
       onClose();
     } catch (e) {

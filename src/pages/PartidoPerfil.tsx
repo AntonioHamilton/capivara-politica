@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PartyForm } from '../components/Forms.tsx';
 import { Posicoes } from '../components/Posicoes.tsx';
 import { ResearchModal } from '../components/ResearchModal.tsx';
-import { Avatar, Fontes, Icon, Tabs } from '../components/ui.tsx';
+import { Avatar, Fontes, Icon, Loading, Tabs } from '../components/ui.tsx';
 import { Versions } from '../components/Versions.tsx';
 import { api } from '../lib/api.ts';
-import type { ItemCandidatoLista } from '../lib/api.ts';
+import type { ItemCandidatoLista, PartidoDetalhe } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { dataBR } from '../lib/format.ts';
 import { promptPartido } from '../lib/prompt.ts';
-import { usePartidos } from '../lib/ranking.ts';
 import { useStore } from '../lib/store.tsx';
 import { CARGOS, ufLabel } from '../lib/types.ts';
 
@@ -19,9 +18,8 @@ const LIMITE_CANDIDATOS = 200;
 
 export function PartidoPerfil() {
   const { id } = useParams();
-  const { data, refresh } = useStore();
+  const { data } = useStore();
   const { user } = useAuth();
-  const partidos = usePartidos();
   const navigate = useNavigate();
   const [aba, setAba] = useState<Aba>('posicoes');
   const [pesquisando, setPesquisando] = useState(false);
@@ -29,15 +27,41 @@ export function PartidoPerfil() {
   const [candidatos, setCandidatos] = useState<ItemCandidatoLista[]>([]);
   const [totalCandidatos, setTotalCandidatos] = useState<number | null>(null);
 
-  const item = partidos.find((p) => String(p.party.id) === id);
+  const [item, setItem] = useState<PartidoDetalhe | null>(null);
+  const [carregando, setCarregando] = useState(true);
+
+  const recarregar = useCallback(() => {
+    api
+      .partido(Number(id))
+      .then(setItem)
+      .catch(() => setItem(null))
+      .finally(() => setCarregando(false));
+  }, [id]);
 
   useEffect(() => {
-    if (!item) return;
-    api.candidatos({ partido: String(item.party.id), ordem: 'compat', limit: LIMITE_CANDIDATOS }).then((r) => {
+    setItem(null);
+    setCandidatos([]);
+    setTotalCandidatos(null);
+    setCarregando(true);
+    recarregar();
+  }, [recarregar]);
+
+  // a lista de candidatos só é pedida quando a aba é aberta
+  useEffect(() => {
+    if (aba !== 'candidatos') return;
+    api.candidatos({ partido: String(id), ordem: 'compat', limit: LIMITE_CANDIDATOS }).then((r) => {
       setCandidatos(r.itens);
       setTotalCandidatos(r.total);
     });
-  }, [item?.party.id]);
+  }, [aba, id]);
+
+  if (carregando) {
+    return (
+      <div className="pagina">
+        <Loading texto="Carregando partido..." variante="inline" />
+      </div>
+    );
+  }
 
   if (!item) {
     return (
@@ -57,7 +81,6 @@ export function PartidoPerfil() {
     if (!window.confirm(`Remover o partido ${party.sigla}? As pesquisas salvas dele também serão apagadas.`)) return;
     try {
       await api.deleteParty(party.id);
-      await refresh();
       navigate('/app/partidos');
     } catch (e) {
       window.alert((e as Error).message);
@@ -133,7 +156,9 @@ export function PartidoPerfil() {
       {aba === 'posicoes' && <Posicoes tipo="partido" quiz={data.quiz} alvo={d?.quiz} />}
 
       {aba === 'candidatos' &&
-        (candidatos.length ? (
+        (totalCandidatos === null ? (
+          <Loading texto="Carregando candidatos..." variante="inline" />
+        ) : candidatos.length ? (
           <>
             <ul className="lista">
               {candidatos.map((i) => (
@@ -161,7 +186,7 @@ export function PartidoPerfil() {
           <p className="vazio">Nenhum candidato deste partido.</p>
         ))}
 
-      {aba === 'pesquisas' && <Versions tipo="partido" entidadeId={party.id} onChange={refresh} />}
+      {aba === 'pesquisas' && <Versions tipo="partido" entidadeId={party.id} onChange={recarregar} />}
 
       {user.isAdmin && pesquisando && (
         <ResearchModal
@@ -170,9 +195,10 @@ export function PartidoPerfil() {
           titulo={party.sigla}
           prompt={promptPartido(party)}
           onClose={() => setPesquisando(false)}
+          onSaved={recarregar}
         />
       )}
-      {user.isAdmin && editando && <PartyForm party={party} onClose={() => setEditando(false)} />}
+      {user.isAdmin && editando && <PartyForm party={party} onClose={() => setEditando(false)} onSaved={recarregar} />}
     </div>
   );
 }

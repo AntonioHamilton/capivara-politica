@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api } from '../lib/api.ts';
-import { useStore } from '../lib/store.tsx';
+import type { PartidoOpcao } from '../lib/api.ts';
 import { CARGOS, UFS } from '../lib/types.ts';
 import type { Candidate, Cargo, Party } from '../lib/types.ts';
 import { ImagePicker, Modal } from './ui.tsx';
@@ -9,7 +9,6 @@ import { ImagePicker, Modal } from './ui.tsx';
 const NOVO = 'novo';
 
 export function PartyForm({ party, onClose, onSaved }: { party?: Party; onClose: () => void; onSaved?: (id: number) => void }) {
-  const { refresh } = useStore();
   const [sigla, setSigla] = useState(party?.sigla ?? '');
   const [nome, setNome] = useState(party?.nome ?? '');
   const [logo, setLogo] = useState<string | null>(party?.logo ?? null);
@@ -22,7 +21,6 @@ export function PartyForm({ party, onClose, onSaved }: { party?: Party; onClose:
       let id = party?.id;
       if (party) await api.updateParty(party.id, { sigla, nome, logo });
       else id = (await api.addParty({ sigla, nome, logo })).id;
-      await refresh();
       onSaved?.(id!);
       onClose();
     } catch (err) {
@@ -63,9 +61,12 @@ export function CandidateForm({
 }: {
   candidate?: Candidate;
   onClose: () => void;
-  onSaved?: (id: number) => void;
+  onSaved?: (id: number, salvo: Candidate) => void;
 }) {
-  const { data, refresh } = useStore();
+  const [partidos, setPartidos] = useState<PartidoOpcao[]>([]);
+  useEffect(() => {
+    api.partidosOpcoes().then(setPartidos);
+  }, []);
   const [nome, setNome] = useState(candidate?.nome ?? '');
   const [cargo, setCargo] = useState<Cargo>(candidate?.cargo ?? 'deputado_federal');
   const [uf, setUf] = useState(candidate && candidate.uf !== 'BR' ? candidate.uf : '');
@@ -86,10 +87,9 @@ export function CandidateForm({
       }
       const input = { nome, cargo, uf: cargo === 'presidente' ? 'BR' : uf, partyId, foto };
       let id = candidate?.id;
-      if (candidate) await api.updateCandidate(candidate.id, input);
+      if (candidate) await api.updateCandidate(candidate.id, input, { cargo: candidate.cargo, uf: candidate.uf });
       else id = (await api.addCandidate(input)).id;
-      await refresh();
-      onSaved?.(id!);
+      onSaved?.(id!, { id: id!, ...input });
       onClose();
     } catch (err) {
       setErro((err as Error).message);
@@ -132,7 +132,7 @@ export function CandidateForm({
           <label>Partido</label>
           <select required value={partido} onChange={(e) => setPartido(e.target.value)}>
             <option value="">Selecione</option>
-            {data.parties.map((p) => (
+            {partidos.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.sigla} - {p.nome}
               </option>

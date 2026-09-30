@@ -111,6 +111,15 @@ await db.executeMultiple(`
     criado_em TEXT NOT NULL
   );
 
+  CREATE INDEX IF NOT EXISTS candidates_party ON candidates(party_id);
+
+  CREATE TABLE IF NOT EXISTS party_compat (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    party_id INTEGER NOT NULL,
+    dados TEXT NOT NULL,
+    PRIMARY KEY (user_id, party_id)
+  );
+
   CREATE TABLE IF NOT EXISTS colinhas (
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,

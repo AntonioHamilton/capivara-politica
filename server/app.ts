@@ -21,6 +21,7 @@ import {
 } from './auth.ts';
 import { emailRecuperacaoHtml, enviarEmail } from './email.ts';
 import { compatibilidade } from '../src/lib/scoring.ts';
+import type { Compat } from '../src/lib/scoring.ts';
 import type { QuizState } from '../src/lib/types.ts';
 
 const PORT = Number(process.env.PORT ?? 4310);
@@ -76,21 +77,34 @@ async function listarTudoCompleto(userId: number) {
   return { parties, candidates, research, quiz: await quizDoUsuario(userId) };
 }
 
-// versão leve usada no login/bootstrap do app: partidos (com contagem de candidatos),
-// pesquisas de partido (poucas dezenas) e o quiz do usuário — nada de candidatos/pesquisas
-// de candidato, que hoje somam ~20 mil linhas e são pedidos sob demanda pelas rotas abaixo.
-async function listarBootstrap(userId: number) {
-  const parties = await all<Record<string, unknown>>(
-    `SELECT p.id, p.sigla, p.nome, p.logo, (SELECT COUNT(*) FROM candidates c WHERE c.party_id = p.id) AS candidatosCount
-     FROM parties p ORDER BY p.sigla`,
+// bootstrap do app: só o quiz do usuário. Partidos, candidatos e pesquisas são pedidos sob
+// demanda por cada tela (rotas abaixo).
+
+// compatibilidade usuário x partido fica guardada em party_compat (uma linha por usuário e
+// partido) pra não recalcular a cada abertura da tela. Linhas ausentes são calculadas na hora
+// de ler; são apagadas quando o quiz do usuário ou a pesquisa do partido mudam.
+async function compatDosPartidos(userId: number, quiz: QuizState): Promise<Map<number, Compat>> {
+  const guardadas = await all<{ partyId: number; dados: string }>('SELECT party_id AS partyId, dados FROM party_compat WHERE user_id = ?', [userId]);
+  const mapa = new Map<number, Compat>(guardadas.map((g) => [g.partyId, JSON.parse(g.dados)]));
+
+  const pesquisas = await all<{ entidadeId: number; dados: string }>(
+    "SELECT entidade_id AS entidadeId, dados FROM research WHERE tipo = 'partido' AND ativa = 1",
   );
-  const researchPartidos = (
-    await all<{ ativa: number; dados: string }>(
-      `SELECT id, tipo, entidade_id AS entidadeId, criado_em AS criadoEm, ativa, dados
-       FROM research WHERE tipo = 'partido' ORDER BY id DESC`,
-    )
-  ).map((r) => ({ ...r, ativa: r.ativa === 1, dados: JSON.parse(r.dados) }));
-  return { parties, researchPartidos, quiz: await quizDoUsuario(userId) };
+  for (const p of pesquisas) {
+    if (mapa.has(p.entidadeId)) continue;
+    const compat = compatibilidade(quiz, JSON.parse(p.dados).quiz);
+    mapa.set(p.entidadeId, compat);
+    await run('INSERT OR REPLACE INTO party_compat (user_id, party_id, dados) VALUES (?, ?, ?)', [userId, p.entidadeId, JSON.stringify(compat)]);
+  }
+  return mapa;
+}
+
+async function pesquisaAtivaDoPartido(partyId: number) {
+  const r = await get<{ id: number; criadoEm: string; dados: string }>(
+    "SELECT id, criado_em AS criadoEm, dados FROM research WHERE tipo = 'partido' AND entidade_id = ? AND ativa = 1",
+    [partyId],
+  );
+  return r ? { id: r.id, tipo: 'partido' as const, entidadeId: partyId, criadoEm: r.criadoEm, ativa: true, dados: JSON.parse(r.dados) } : undefined;
 }
 
 const chaveGrupo = (cargo: string, uf: string) => `${cargo}:${uf}`;
@@ -395,13 +409,46 @@ api.get('/feedback', exigirAdmin, async (_req, res) => {
 });
 
 api.get('/data', async (req, res) => {
-  res.json(await listarBootstrap(usuario(req).userId));
+  res.json({ quiz: await quizDoUsuario(usuario(req).userId) });
 });
 
 api.get('/contagens', exigirAdmin, async (_req, res) => {
   const candidatos = (await get<{ n: number }>('SELECT COUNT(*) AS n FROM candidates'))!.n;
   const pesquisas = (await get<{ n: number }>('SELECT COUNT(*) AS n FROM research'))!.n;
-  res.json({ candidatos, pesquisas });
+  const partidos = (await get<{ n: number }>('SELECT COUNT(*) AS n FROM parties'))!.n;
+  res.json({ candidatos, pesquisas, partidos });
+});
+
+// tela de Partidos: só o que os cards mostram (logo, sigla, nome, quantidade de candidatos e
+// compatibilidade já guardada) — sem o texto das pesquisas
+api.get('/partidos', async (req, res) => {
+  const userId = usuario(req).userId;
+  const [partidos, contagens, compats] = await Promise.all([
+    all<{ id: number; sigla: string; nome: string; logo: string | null }>('SELECT id, sigla, nome, logo FROM parties ORDER BY sigla'),
+    all<{ partyId: number; n: number }>('SELECT party_id AS partyId, COUNT(*) AS n FROM candidates WHERE party_id IS NOT NULL GROUP BY party_id'),
+    quizDoUsuario(userId).then((quiz) => compatDosPartidos(userId, quiz)),
+  ]);
+  const porPartido = new Map(contagens.map((c) => [c.partyId, c.n]));
+  res.json(
+    partidos.map((p) => ({ ...p, candidatosCount: porPartido.get(p.id) ?? 0, compat: compats.get(p.id) ?? null, pesquisado: compats.has(p.id) })),
+  );
+});
+
+// opções leves de partido (select de filtro, formulário de candidato, colinha)
+api.get('/partidos-opcoes', async (_req, res) => {
+  res.json(await all('SELECT id, sigla, nome, logo FROM parties ORDER BY sigla'));
+});
+
+api.get('/partidos/:id', async (req, res) => {
+  const id = idParam(req);
+  const party = await get<Record<string, unknown>>(
+    'SELECT p.id, p.sigla, p.nome, p.logo, (SELECT COUNT(*) FROM candidates c WHERE c.party_id = p.id) AS candidatosCount FROM parties p WHERE p.id = ?',
+    [id],
+  );
+  if (!party) throw new HttpError(404, 'Partido não encontrado');
+  const userId = usuario(req).userId;
+  const compats = await compatDosPartidos(userId, await quizDoUsuario(userId));
+  res.json({ party, pesquisa: await pesquisaAtivaDoPartido(id), compat: compats.get(id) ?? null });
 });
 
 // acima disso, buscar a pesquisa (texto grande) de todo mundo pra ordenar por compatibilidade
@@ -669,6 +716,7 @@ api.delete('/parties/:id', exigirAdmin, async (req, res) => {
   if (uso.n > 0) throw new HttpError(409, 'Há candidatos usando este partido. Remova ou troque o partido deles antes.');
   await transaction(async (t) => {
     await t.run("DELETE FROM research WHERE tipo = 'partido' AND entidade_id = ?", [id]);
+    await t.run('DELETE FROM party_compat WHERE party_id = ?', [id]);
     await t.run('DELETE FROM parties WHERE id = ?', [id]);
   });
   res.json({ ok: true });
@@ -726,6 +774,7 @@ api.post('/research', exigirAdmin, async (req, res) => {
       new Date().toISOString(),
       JSON.stringify(req.body.dados),
     ]);
+    if (tipo === 'partido') await t.run('DELETE FROM party_compat WHERE party_id = ?', [entidadeId]);
     return Number(r.lastInsertRowid);
   });
   if (tipo === 'candidato') invalidarCacheColinha();
@@ -739,6 +788,7 @@ api.post('/research/:id/activate', exigirAdmin, async (req, res) => {
   await transaction(async (t) => {
     await t.run('UPDATE research SET ativa = 0 WHERE tipo = ? AND entidade_id = ?', [r.tipo, r.entidadeId]);
     await t.run('UPDATE research SET ativa = 1 WHERE id = ?', [id]);
+    if (r.tipo === 'partido') await t.run('DELETE FROM party_compat WHERE party_id = ?', [r.entidadeId]);
   });
   if (r.tipo === 'candidato') invalidarCacheColinha();
   res.json({ ok: true });
@@ -761,6 +811,7 @@ api.delete('/research/:id', exigirAdmin, async (req, res) => {
         [r.tipo, r.entidadeId],
       );
     }
+    if (r.tipo === 'partido') await t.run('DELETE FROM party_compat WHERE party_id = ?', [r.entidadeId]);
   });
   if (r.tipo === 'candidato') invalidarCacheColinha();
   res.json({ ok: true });
@@ -774,6 +825,7 @@ api.put('/quiz', async (req, res) => {
       eticaEliminatoria: req.body.eticaEliminatoria ?? null,
     }),
   ]);
+  await run('DELETE FROM party_compat WHERE user_id = ?', [usuario(req).userId]);
   res.json({ ok: true });
 });
 
@@ -814,6 +866,7 @@ api.post('/import', exigirAdmin, async (req, res) => {
     // Substitui os dados compartilhados (candidatos, partidos, pesquisas). Não mexe em
     // contas de outros usuários nem no perfil (quiz) deles — só o de quem está importando.
     await t.run('DELETE FROM research');
+    await t.run('DELETE FROM party_compat');
     await t.run('DELETE FROM candidates');
     await t.run('DELETE FROM parties');
     for (const p of b.parties) {

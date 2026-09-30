@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
+import type { GrupoCandidatos } from '../lib/cache.ts';
 import type { Pesquisa } from '../lib/types.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { dataHoraBR } from '../lib/format.ts';
@@ -10,10 +11,12 @@ const ROTULO: Record<string, string> = { sim: 'Sim', nao: 'Não', sem_info: 'Sem
 export function Versions({
   tipo,
   entidadeId,
+  grupo,
   onChange,
 }: {
   tipo: 'candidato' | 'partido';
   entidadeId: number;
+  grupo?: GrupoCandidatos;
   onChange?: () => void;
 }) {
   const { user } = useAuth();
@@ -69,7 +72,7 @@ export function Versions({
                   {comparando === v.id ? 'Fechar comparação' : 'Comparar com a atual'}
                 </button>
                 {user.isAdmin && (
-                  <button className="btn secundario pequeno" onClick={() => acao(() => api.activateResearch(v.id))}>
+                  <button className="btn secundario pequeno" onClick={() => acao(() => api.activateResearch(v.id, tipo, grupo))}>
                     Restaurar
                   </button>
                 )}
@@ -78,7 +81,7 @@ export function Versions({
             {user.isAdmin && (
               <button
                 className="btn texto pequeno"
-                onClick={() => window.confirm('Excluir esta versão da pesquisa?') && acao(() => api.deleteResearch(v.id))}
+                onClick={() => window.confirm('Excluir esta versão da pesquisa?') && acao(() => api.deleteResearch(v.id, tipo, grupo))}
               >
                 Excluir
               </button>

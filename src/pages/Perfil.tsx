@@ -42,7 +42,7 @@ function Info({ rotulo, valor }: { rotulo: string; valor: ReactNode }) {
 
 export function Perfil() {
   const { id } = useParams();
-  const { data, refresh } = useStore();
+  const { data } = useStore();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [aba, setAba] = useState<Aba>('visao');
@@ -92,8 +92,7 @@ export function Perfil() {
 
   const remover = async () => {
     if (!window.confirm(`Remover ${cand.nome} da lista? As pesquisas salvas dele também serão apagadas.`)) return;
-    await api.deleteCandidate(cand.id);
-    await refresh();
+    await api.deleteCandidate(cand.id, { cargo: cand.cargo, uf: cand.uf });
     navigate('/app');
   };
 
@@ -325,7 +324,7 @@ export function Perfil() {
           <p className="vazio">Ainda não há pesquisa. Use o botão Reload.</p>
         ))}
 
-      {aba === 'pesquisas' && <Versions tipo="candidato" entidadeId={cand.id} onChange={recarregar} />}
+      {aba === 'pesquisas' && <Versions tipo="candidato" entidadeId={cand.id} grupo={{ cargo: cand.cargo, uf: cand.uf }} onChange={recarregar} />}
 
       {user.isAdmin && pesquisando && (
         <ResearchModal
@@ -333,12 +332,21 @@ export function Perfil() {
           entidadeId={cand.id}
           titulo={cand.nome}
           prompt={promptCandidato(cand, party)}
+          grupo={{ cargo: cand.cargo, uf: cand.uf }}
           onClose={() => setPesquisando(false)}
           onSaved={recarregar}
         />
       )}
       {user.isAdmin && editando && (
-        <CandidateForm candidate={cand} onClose={() => setEditando(false)} onSaved={recarregar} />
+        <CandidateForm
+          candidate={cand}
+          onClose={() => setEditando(false)}
+          onSaved={(_, salvo) => {
+            // mostra já o que foi salvo (ex: a foto nova) e só então confirma com o GET deste candidato
+            setIt((atual) => (atual ? { ...atual, cand: salvo } : atual));
+            recarregar();
+          }}
+        />
       )}
     </div>
   );

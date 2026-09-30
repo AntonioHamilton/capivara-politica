@@ -76,8 +76,6 @@ export type Pesquisa =
   | (PesquisaBase & { tipo: 'partido'; dados: PartidoPesquisa });
 
 export interface Data {
-  parties: Party[];
-  researchPartidos: Extract<Pesquisa, { tipo: 'partido' }>[];
   quiz: QuizState;
 }
 

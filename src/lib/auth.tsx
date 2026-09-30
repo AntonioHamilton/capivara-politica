@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Loading } from '../components/ui.tsx';
 import { api } from './api.ts';
+import { invalidarCache } from './cache.ts';
 import { StoreProvider } from './store.tsx';
 import type { Data } from './types.ts';
 
@@ -45,6 +46,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   const entrar = (u: User | null) => {
     setUser(u);
+    invalidarCache();
     if (!u) return;
     setMostrarLoading(true);
     api
@@ -72,6 +74,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   const logout = () => {
     fetch('/api/auth/logout', { method: 'POST' }).finally(() => {
+      invalidarCache();
       setUser(null);
       setData(null);
     });

@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom';
 import { toPng } from 'html-to-image';
 import { Avatar, Loading, PartyBadge } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
-import type { ColinhaItemPublico, ColinhaPublica, MelhoresColinha, OpcaoColinha } from '../lib/api.ts';
+import type { ColinhaItemPublico, ColinhaPublica, MelhoresColinha, OpcaoColinha, PartidoOpcao } from '../lib/api.ts';
 import { estadoMaisProximo } from '../lib/geo.ts';
 import { quizCompleto } from '../lib/scoring.ts';
 import { useStore } from '../lib/store.tsx';
 import { CARGOS, UFS, ufLabel } from '../lib/types.ts';
-import type { Cargo, Party } from '../lib/types.ts';
+import type { Cargo } from '../lib/types.ts';
 
 const ORDEM_CARGOS: Cargo[] = ['deputado_federal', 'deputado_estadual', 'senador', 'governador', 'presidente'];
 
@@ -129,7 +129,7 @@ function CartaoCargo({
   grupo: Grupo;
   escolha: Escolha;
   onMudar: (escolha: Escolha) => void;
-  party: Party | undefined;
+  party: PartidoOpcao | undefined;
   pct: number | null | undefined;
 }) {
   const opcao = escolha.candidatoId != null ? grupo.opcoes.find((o) => o.id === escolha.candidatoId) : undefined;
@@ -262,7 +262,16 @@ export function Colinha() {
   const [msg, setMsg] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  const partidosPorId = useMemo(() => new Map(data.parties.map((p) => [p.id, p])), [data.parties]);
+  const [partidos, setPartidos] = useState<PartidoOpcao[]>([]);
+  const [partidosCarregados, setPartidosCarregados] = useState(false);
+  const partidosPorId = useMemo(() => new Map(partidos.map((p) => [p.id, p])), [partidos]);
+
+  useEffect(() => {
+    api
+      .partidosOpcoes()
+      .then(setPartidos)
+      .finally(() => setPartidosCarregados(true));
+  }, []);
 
   // presidente é nacional (uf=BR), não muda com o estado escolhido — carrega uma vez só, e a
   // lista de opções fica em cache no servidor (não depende do usuário)
@@ -438,13 +447,13 @@ export function Colinha() {
 
   // salva automaticamente qualquer edição do usuário, uma vez que a colinha salva já foi carregada
   useEffect(() => {
-    if (!carregado || Object.keys(escolhas).length === 0) return;
+    if (!carregado || !partidosCarregados || Object.keys(escolhas).length === 0) return;
     const t = setTimeout(() => {
       api.saveColinha(itensPublicos()).catch(() => {});
     }, 800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [escolhas, carregado]);
+  }, [escolhas, carregado, partidosCarregados]);
 
   if (!quizCompleto(data.quiz)) {
     return (

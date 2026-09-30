@@ -75,7 +75,7 @@ export function Avatar({ src, nome, size = 56 }: { src: string | null | undefine
   );
 }
 
-export function PartyBadge({ party, uf }: { party: Party | undefined; uf?: string }) {
+export function PartyBadge({ party, uf }: { party: Pick<Party, 'sigla' | 'logo'> | undefined; uf?: string }) {
   if (!party) return <span className="party-badge muted">Sem partido</span>;
   return (
     <span className="party-badge">

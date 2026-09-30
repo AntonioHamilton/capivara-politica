@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/ui.tsx';
 import { EIXOS, ORDEM_EIXOS, PERGUNTAS, PERGUNTA_ETICA } from '../lib/questions.ts';
-import { usePartidos } from '../lib/ranking.ts';
+import { api } from '../lib/api.ts';
+import type { PartidoLista } from '../lib/api.ts';
 import { posicaoNosEixos, totalComResposta } from '../lib/scoring.ts';
 import { useStore } from '../lib/store.tsx';
 import type { RespostaUsuario } from '../lib/types.ts';
@@ -122,13 +123,16 @@ export function Quiz() {
 
 function Resultado({ onRefazer, onRevisar }: { onRefazer: () => void; onRevisar: () => void }) {
   const { data } = useStore();
-  const partidos = usePartidos();
+  const [partidos, setPartidos] = useState<PartidoLista[] | null>(null);
+  useEffect(() => {
+    api.partidos().then(setPartidos);
+  }, []);
   const posicoes = posicaoNosEixos(data.quiz);
-  const ranking = partidos
+  const ranking = (partidos ?? [])
     .filter((p) => p.compat?.pct != null)
     .sort((a, b) => b.compat!.pct! - a.compat!.pct!)
     .slice(0, 5);
-  const naoPesquisados = partidos.filter((p) => p.compat?.pct == null).length;
+  const naoPesquisados = (partidos ?? []).filter((p) => p.compat?.pct == null).length;
 
   return (
     <div className="pagina">
@@ -172,16 +176,18 @@ function Resultado({ onRefazer, onRevisar }: { onRefazer: () => void; onRevisar:
 
         <section className="card">
           <h3>Partidos mais alinhados</h3>
-          {ranking.length > 0 ? (
+          {partidos === null ? (
+            <p className="muted">Carregando...</p>
+          ) : ranking.length > 0 ? (
             <ol className="ranking-partidos">
               {ranking.map((p, i) => (
-                <li key={p.party.id} className={i === 0 ? 'primeiro' : ''}>
-                  <Link to={`/app/partido/${p.party.id}`}>
+                <li key={p.id} className={i === 0 ? 'primeiro' : ''}>
+                  <Link to={`/app/partido/${p.id}`}>
                     <span className="pos">{i + 1}º</span>
-                    {p.party.logo && <img src={p.party.logo} alt="" />}
+                    {p.logo && <img src={p.logo} alt="" />}
                     <span className="nome">
-                      {p.party.sigla}
-                      <small>{p.party.nome}</small>
+                      {p.sigla}
+                      <small>{p.nome}</small>
                     </span>
                     <span className="nota">{p.compat!.pct}%</span>
                   </Link>

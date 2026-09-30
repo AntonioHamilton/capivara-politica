@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CandidateForm } from '../components/Forms.tsx';
 import { Avatar, Icon, Loading, PartyBadge } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
-import type { ItemCandidatoLista } from '../lib/api.ts';
+import type { ItemCandidatoLista, PartidoOpcao } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { totalRespondidas } from '../lib/scoring.ts';
 import { useStore } from '../lib/store.tsx';
@@ -41,12 +41,15 @@ export function Lista() {
   const navigate = useNavigate();
   const [adicionando, setAdicionando] = useState(false);
   const [cargo, setCargo] = useState(() => filtrosSalvos().cargo ?? '');
-  const [uf, setUf] = useState(() => filtrosSalvos().uf ?? '');
+  const [ufEscolhido, setUf] = useState(() => filtrosSalvos().uf ?? '');
   const [partido, setPartido] = useState(() => filtrosSalvos().partido ?? '');
   const [buscaCampo, setBuscaCampo] = useState('');
   const [busca, setBusca] = useState('');
   const [ordem, setOrdem] = useState<Ordem>(() => filtrosSalvos().ordem ?? 'compat');
   const [top3, setTop3] = useState(() => filtrosSalvos().top3 ?? false);
+  // presidente é nacional (uf 'BR' no banco): nesse cargo o filtro de estado não se aplica e
+  // fica em "Todos os estados"
+  const uf = cargo === 'presidente' || ufEscolhido === 'BR' ? '' : ufEscolhido;
 
   // lembra os selects (cargo/estado/partido/ordem/top3) entre visitas — não inclui a busca por
   // nome, que é mais transitória
@@ -57,6 +60,10 @@ export function Lista() {
       // sem armazenamento disponível, os filtros valem só nesta sessão
     }
   }, [cargo, uf, partido, ordem, top3]);
+
+  // opções do filtro de partido: chamada leve (id e sigla), feita depois da primeira lista pra
+  // não competir com ela
+  const [partidos, setPartidos] = useState<PartidoOpcao[]>([]);
 
   const [itens, setItens] = useState<ItemCandidatoLista[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -97,6 +104,11 @@ export function Lista() {
       ativo = false;
     };
   }, [cargo, uf, partido, busca, ordem, top3]);
+
+  useEffect(() => {
+    if (carregandoFiltro || partidos.length) return;
+    api.partidosOpcoes().then(setPartidos).catch(() => {});
+  }, [carregandoFiltro, partidos.length]);
 
   const carregarMais = useCallback(async () => {
     if (carregandoRef.current) return;
@@ -171,7 +183,14 @@ export function Lista() {
       )}
 
       <div className="filtros">
-        <select value={cargo} onChange={(e) => setCargo(e.target.value)} aria-label="Cargo">
+        <select
+          value={cargo}
+          onChange={(e) => {
+            setCargo(e.target.value);
+            if (e.target.value === 'presidente') setUf('');
+          }}
+          aria-label="Cargo"
+        >
           <option value="">Todos os cargos</option>
           {Object.entries(CARGOS).map(([k, v]) => (
             <option key={k} value={k}>
@@ -179,9 +198,8 @@ export function Lista() {
             </option>
           ))}
         </select>
-        <select value={uf} onChange={(e) => setUf(e.target.value)} aria-label="Estado">
+        <select value={uf} onChange={(e) => setUf(e.target.value)} aria-label="Estado" disabled={cargo === 'presidente'}>
           <option value="">Todos os estados</option>
-          <option value="BR">Brasil (presidente)</option>
           {Object.entries(UFS).map(([k, v]) => (
             <option key={k} value={k}>
               {v}
@@ -190,7 +208,7 @@ export function Lista() {
         </select>
         <select value={partido} onChange={(e) => setPartido(e.target.value)} aria-label="Partido">
           <option value="">Todos os partidos</option>
-          {data.parties.map((p) => (
+          {partidos.map((p) => (
             <option key={p.id} value={p.id}>
               {p.sigla}
             </option>

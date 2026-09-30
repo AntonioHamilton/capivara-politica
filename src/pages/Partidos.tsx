@@ -1,18 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PartyForm } from '../components/Forms.tsx';
-import { Avatar, Icon } from '../components/ui.tsx';
+import { Avatar, Icon, Loading } from '../components/ui.tsx';
+import { api } from '../lib/api.ts';
+import type { PartidoLista } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
-import { usePartidos } from '../lib/ranking.ts';
 
 export function Partidos() {
   const { user } = useAuth();
-  const partidos = usePartidos();
   const navigate = useNavigate();
   const [adicionando, setAdicionando] = useState(false);
+  const [partidos, setPartidos] = useState<PartidoLista[] | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
 
-  const ordenados = [...partidos].sort(
-    (a, b) => (b.compat?.pct ?? -1) - (a.compat?.pct ?? -1) || a.party.sigla.localeCompare(b.party.sigla),
+  useEffect(() => {
+    api
+      .partidos()
+      .then(setPartidos)
+      .catch((e: Error) => setErro(e.message));
+  }, []);
+
+  const ordenados = useMemo(
+    () => [...(partidos ?? [])].sort((a, b) => (b.compat?.pct ?? -1) - (a.compat?.pct ?? -1) || a.sigla.localeCompare(b.sigla)),
+    [partidos],
   );
 
   return (
@@ -29,11 +39,15 @@ export function Partidos() {
         )}
       </div>
 
-      {ordenados.length === 0 ? (
+      {erro ? (
+        <p className="vazio">Não foi possível carregar: {erro}</p>
+      ) : partidos === null ? (
+        <Loading texto="Carregando partidos..." variante="inline" />
+      ) : ordenados.length === 0 ? (
         <p className="vazio">Nenhum partido cadastrado. Eles são criados ao adicionar candidatos, ou por aqui.</p>
       ) : (
         <ul className="grade-partidos">
-          {ordenados.map(({ party, compat }) => (
+          {ordenados.map((party) => (
             <li key={party.id}>
               <Link to={`/app/partido/${party.id}`} className="card-partido">
                 <Avatar src={party.logo} nome={party.sigla} size={56} />
@@ -42,10 +56,10 @@ export function Partidos() {
                   <small>{party.nome}</small>
                 </span>
                 <span className="col-compat">
-                  {compat?.pct != null ? (
-                    <span className="nota">{compat.pct}%</span>
+                  {party.compat?.pct != null ? (
+                    <span className="nota">{party.compat.pct}%</span>
                   ) : (
-                    <span className="selo-neutro">{compat ? 'Dados insuficientes' : 'Não pesquisado'}</span>
+                    <span className="selo-neutro">{party.pesquisado ? 'Dados insuficientes' : 'Não pesquisado'}</span>
                   )}
                 </span>
                 <small className="muted">{party.candidatosCount} candidato(s)</small>

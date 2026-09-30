@@ -3,7 +3,6 @@ import type { FormEvent } from 'react';
 import { Icon } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
 import type { UsuarioInfo } from '../lib/api.ts';
-import { useStore } from '../lib/store.tsx';
 
 function NovoAdminForm({ onCriado, onClose }: { onCriado: () => void; onClose: () => void }) {
   const [username, setUsername] = useState('');
@@ -129,9 +128,8 @@ function Usuarios() {
 }
 
 export function Dados() {
-  const { data, refresh } = useStore();
   const [msg, setMsg] = useState<string | null>(null);
-  const [contagens, setContagens] = useState<{ candidatos: number; pesquisas: number } | null>(null);
+  const [contagens, setContagens] = useState<{ candidatos: number; pesquisas: number; partidos: number } | null>(null);
 
   useEffect(() => {
     api.contagens().then(setContagens);
@@ -141,7 +139,6 @@ export function Dados() {
     if (!window.confirm('Importar vai SUBSTITUIR todos os dados atuais (candidatos, partidos, pesquisas e quiz). Continuar?')) return;
     try {
       await api.importAll(JSON.parse(await file.text()));
-      await refresh();
       api.contagens().then(setContagens);
       setMsg('Backup importado com sucesso.');
     } catch (e) {
@@ -156,7 +153,7 @@ export function Dados() {
           <h1>Dados</h1>
           <p className="muted">
             {contagens ? `${contagens.candidatos} candidatos · ` : ''}
-            {data.parties.length} partidos
+            {contagens ? `${contagens.partidos} partidos` : ''}
             {contagens ? ` · ${contagens.pesquisas} pesquisas salvas` : ''}
           </p>
         </div>
