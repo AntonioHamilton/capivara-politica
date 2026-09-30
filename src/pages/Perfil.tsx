@@ -4,10 +4,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CandidateForm } from '../components/Forms.tsx';
 import { Posicoes } from '../components/Posicoes.tsx';
 import { ResearchModal } from '../components/ResearchModal.tsx';
-import { Avatar, Fontes, Icon, PartyBadge, Tabs } from '../components/ui.tsx';
+import { Avatar, Fontes, Icon, Loading, PartyBadge, Tabs } from '../components/ui.tsx';
 import { Versions } from '../components/Versions.tsx';
 import { api } from '../lib/api.ts';
-import type { ItemCandidatoDetalhe } from '../lib/api.ts';
+import type { ItemCandidatoDetalhe, RankingCandidato } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { brl, dataBR } from '../lib/format.ts';
 import { promptCandidato } from '../lib/prompt.ts';
@@ -49,6 +49,7 @@ export function Perfil() {
   const [pesquisando, setPesquisando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [it, setIt] = useState<ItemCandidatoDetalhe | null>(null);
+  const [ranking, setRanking] = useState<(RankingCandidato & { id: number }) | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -60,10 +61,16 @@ export function Perfil() {
       .then(setIt)
       .catch((e: Error) => setErro(e.message))
       .finally(() => setCarregando(false));
+    // a posição no ranking é mais lenta que o perfil: aparece quando chegar, sem travar a tela
+    api
+      .candidatoRanking(Number(id))
+      .then((r) => setRanking({ ...r, id: Number(id) }))
+      .catch(() => setRanking(null));
   }, [id]);
 
   useEffect(() => {
     setIt(null);
+    setRanking(null);
     setErro(null);
     recarregar();
   }, [recarregar]);
@@ -71,7 +78,7 @@ export function Perfil() {
   if (carregando && !it) {
     return (
       <div className="pagina">
-        <p className="muted">Carregando...</p>
+        <Loading texto="Carregando candidato..." variante="inline" />
       </div>
     );
   }
@@ -163,9 +170,9 @@ export function Perfil() {
               <span className="muted pequeno-texto">
                 baseada em {compat.comparadas} de {compat.respondidas} perguntas
               </span>
-              {it.rank && (
+              {ranking?.id === cand.id && ranking.rank && (
                 <span className="muted">
-                  {it.rank}º de {it.totalGrupo} em {CARGOS[cand.cargo]} {ufLabel(cand.uf)}
+                  {ranking.rank}º de {ranking.totalGrupo} em {CARGOS[cand.cargo]} {ufLabel(cand.uf)}
                 </span>
               )}
             </>

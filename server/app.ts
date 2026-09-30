@@ -167,17 +167,6 @@ function ordenarItens<T extends { compat: { pct: number | null } | null; conflit
   return [...itens].sort((a, b) => peso(a) - peso(b) || (b.compat?.pct ?? 0) - (a.compat?.pct ?? 0) || a.cand.nome.localeCompare(b.cand.nome));
 }
 
-async function linhasGrupo(cargo: string, uf: string): Promise<LinhaCandidato[]> {
-  return all<LinhaCandidato>(
-    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
-            r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
-     FROM candidates c
-     LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
-     WHERE c.cargo = ? AND c.uf = ?`,
-    [cargo, uf],
-  );
-}
-
 // opções (nome, número, partido, foto) pra popular o <select> da Colinha — sem compatibilidade,
 // que depende do quiz de cada usuário. Como só muda quando um admin edita candidato/pesquisa,
 // fica em cache em memória por cargo+uf (a Colinha nunca filtra por outra coisa).
@@ -554,20 +543,65 @@ api.get('/candidatos', async (req, res) => {
   res.json({ total, itens: pagina.map(montarLeve) });
 });
 
+// perfil do candidato: só ele (candidato, partido e pesquisa ativa numa consulta, em paralelo
+// com o quiz do usuário). A posição no ranking exige olhar o grupo todo e vem à parte, em
+// /candidatos/:id/ranking, pra não atrasar a abertura do perfil.
 api.get('/candidatos/:id', async (req, res) => {
   const id = idParam(req);
-  const cand = await get<{ cargo: string; uf: string }>('SELECT cargo, uf FROM candidates WHERE id = ?', [id]);
-  if (!cand) throw new HttpError(404, 'Candidato não encontrado');
+  const [l, quiz] = await Promise.all([
+    get<Record<string, unknown> & { pesquisaDados: string | null; pesquisaId: number | null }>(
+      `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
+              p.sigla AS pSigla, p.nome AS pNome, p.logo AS pLogo,
+              r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
+       FROM candidates c
+       LEFT JOIN parties p ON p.id = c.party_id
+       LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+       WHERE c.id = ?`,
+      [id],
+    ),
+    quizDoUsuario(usuario(req).userId),
+  ]);
+  if (!l) throw new HttpError(404, 'Candidato não encontrado');
 
-  // carrega o grupo inteiro (mesmo cargo+uf) pra calcular o ranking corretamente
-  const linhas = await linhasGrupo(cand.cargo, cand.uf);
-  const quiz = await quizDoUsuario(usuario(req).userId);
-  const itens = montarItensRankeados(linhas, quiz);
-  const it = itens.find((i) => i.cand.id === id);
-  if (!it) throw new HttpError(404, 'Candidato não encontrado');
+  const dados = l.pesquisaDados ? JSON.parse(l.pesquisaDados) : null;
+  const compat = dados ? compatibilidade(quiz, dados.quiz, dados.polemicas) : null;
+  res.json({
+    cand: { id: l.id, nome: l.nome, cargo: l.cargo, uf: l.uf, partyId: l.partyId, foto: l.foto },
+    party: l.partyId != null ? { id: l.partyId, sigla: l.pSigla, nome: l.pNome, logo: l.pLogo } : undefined,
+    pesquisa:
+      l.pesquisaId != null
+        ? { id: l.pesquisaId, tipo: 'candidato', entidadeId: id, criadoEm: l.pesquisaCriadoEm, ativa: l.pesquisaAtiva === 1, dados }
+        : undefined,
+    compat,
+    conflito: !!compat && compat.conflitos.length > 0,
+  });
+});
 
-  const party = it.cand.partyId != null ? await get('SELECT id, sigla, nome, logo FROM parties WHERE id = ?', [it.cand.partyId]) : undefined;
-  res.json({ ...it, party });
+// posição do candidato entre os do mesmo cargo+uf. Lê do banco só o quiz e as polêmicas de cada
+// pesquisa (json_extract), não o documento inteiro, que é o que pesava na resposta.
+api.get('/candidatos/:id/ranking', async (req, res) => {
+  const id = idParam(req);
+  const [linhas, quiz] = await Promise.all([
+    all<{ id: number; nome: string; quiz: string | null; polemicas: string | null }>(
+      `SELECT c.id, c.nome, json_extract(r.dados, '$.quiz') AS quiz, json_extract(r.dados, '$.polemicas') AS polemicas
+       FROM candidates c
+       LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+       WHERE c.cargo = (SELECT cargo FROM candidates WHERE id = ?) AND c.uf = (SELECT uf FROM candidates WHERE id = ?)`,
+      [id, id],
+    ),
+    quizDoUsuario(usuario(req).userId),
+  ]);
+  if (!linhas.some((l) => l.id === id)) throw new HttpError(404, 'Candidato não encontrado');
+
+  const classificaveis: { id: number; nome: string; pct: number }[] = [];
+  for (const l of linhas) {
+    if (!l.quiz) continue;
+    const compat = compatibilidade(quiz, JSON.parse(l.quiz), l.polemicas ? JSON.parse(l.polemicas) : []);
+    if (compat.pct != null && compat.conflitos.length === 0) classificaveis.push({ id: l.id, nome: l.nome, pct: compat.pct });
+  }
+  classificaveis.sort((a, b) => b.pct - a.pct || a.nome.localeCompare(b.nome));
+  const posicao = classificaveis.findIndex((c) => c.id === id);
+  res.json(posicao >= 0 ? { rank: posicao + 1, totalGrupo: classificaveis.length } : { rank: null, totalGrupo: 0 });
 });
 
 // opções pro <select> da Colinha: leve (sem compat) e cacheável, já que não depende do usuário.

@@ -633,16 +633,6 @@ function ordenarItens(itens, ordem) {
   const peso = (i) => i.conflito ? 2 : i.compat?.pct != null ? 0 : 1;
   return [...itens].sort((a, b) => peso(a) - peso(b) || (b.compat?.pct ?? 0) - (a.compat?.pct ?? 0) || a.cand.nome.localeCompare(b.cand.nome));
 }
-async function linhasGrupo(cargo, uf) {
-  return all(
-    `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
-            r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
-     FROM candidates c
-     LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
-     WHERE c.cargo = ? AND c.uf = ?`,
-    [cargo, uf]
-  );
-}
 var cacheOpcoesColinha = /* @__PURE__ */ new Map();
 function invalidarCacheColinha() {
   cacheOpcoesColinha.clear();
@@ -953,15 +943,52 @@ api.get("/candidatos", async (req, res) => {
 });
 api.get("/candidatos/:id", async (req, res) => {
   const id = idParam(req);
-  const cand = await get("SELECT cargo, uf FROM candidates WHERE id = ?", [id]);
-  if (!cand) throw new HttpError(404, "Candidato n\xE3o encontrado");
-  const linhas = await linhasGrupo(cand.cargo, cand.uf);
-  const quiz = await quizDoUsuario(usuario(req).userId);
-  const itens = montarItensRankeados(linhas, quiz);
-  const it = itens.find((i) => i.cand.id === id);
-  if (!it) throw new HttpError(404, "Candidato n\xE3o encontrado");
-  const party = it.cand.partyId != null ? await get("SELECT id, sigla, nome, logo FROM parties WHERE id = ?", [it.cand.partyId]) : void 0;
-  res.json({ ...it, party });
+  const [l, quiz] = await Promise.all([
+    get(
+      `SELECT c.id, c.nome, c.cargo, c.uf, c.party_id AS partyId, c.foto,
+              p.sigla AS pSigla, p.nome AS pNome, p.logo AS pLogo,
+              r.id AS pesquisaId, r.criado_em AS pesquisaCriadoEm, r.ativa AS pesquisaAtiva, r.dados AS pesquisaDados
+       FROM candidates c
+       LEFT JOIN parties p ON p.id = c.party_id
+       LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+       WHERE c.id = ?`,
+      [id]
+    ),
+    quizDoUsuario(usuario(req).userId)
+  ]);
+  if (!l) throw new HttpError(404, "Candidato n\xE3o encontrado");
+  const dados = l.pesquisaDados ? JSON.parse(l.pesquisaDados) : null;
+  const compat = dados ? compatibilidade(quiz, dados.quiz, dados.polemicas) : null;
+  res.json({
+    cand: { id: l.id, nome: l.nome, cargo: l.cargo, uf: l.uf, partyId: l.partyId, foto: l.foto },
+    party: l.partyId != null ? { id: l.partyId, sigla: l.pSigla, nome: l.pNome, logo: l.pLogo } : void 0,
+    pesquisa: l.pesquisaId != null ? { id: l.pesquisaId, tipo: "candidato", entidadeId: id, criadoEm: l.pesquisaCriadoEm, ativa: l.pesquisaAtiva === 1, dados } : void 0,
+    compat,
+    conflito: !!compat && compat.conflitos.length > 0
+  });
+});
+api.get("/candidatos/:id/ranking", async (req, res) => {
+  const id = idParam(req);
+  const [linhas, quiz] = await Promise.all([
+    all(
+      `SELECT c.id, c.nome, json_extract(r.dados, '$.quiz') AS quiz, json_extract(r.dados, '$.polemicas') AS polemicas
+       FROM candidates c
+       LEFT JOIN research r ON r.entidade_id = c.id AND r.tipo = 'candidato' AND r.ativa = 1
+       WHERE c.cargo = (SELECT cargo FROM candidates WHERE id = ?) AND c.uf = (SELECT uf FROM candidates WHERE id = ?)`,
+      [id, id]
+    ),
+    quizDoUsuario(usuario(req).userId)
+  ]);
+  if (!linhas.some((l) => l.id === id)) throw new HttpError(404, "Candidato n\xE3o encontrado");
+  const classificaveis = [];
+  for (const l of linhas) {
+    if (!l.quiz) continue;
+    const compat = compatibilidade(quiz, JSON.parse(l.quiz), l.polemicas ? JSON.parse(l.polemicas) : []);
+    if (compat.pct != null && compat.conflitos.length === 0) classificaveis.push({ id: l.id, nome: l.nome, pct: compat.pct });
+  }
+  classificaveis.sort((a, b) => b.pct - a.pct || a.nome.localeCompare(b.nome));
+  const posicao = classificaveis.findIndex((c) => c.id === id);
+  res.json(posicao >= 0 ? { rank: posicao + 1, totalGrupo: classificaveis.length } : { rank: null, totalGrupo: 0 });
 });
 api.get("/colinha-opcoes", async (req, res) => {
   const { cargo, uf } = req.query;

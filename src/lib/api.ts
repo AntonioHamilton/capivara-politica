@@ -109,6 +109,10 @@ export interface ItemCandidatoDetalhe {
   pesquisa: Extract<Pesquisa, { tipo: 'candidato' }> | undefined;
   compat: Compat | null;
   conflito: boolean;
+}
+
+// posição do candidato entre os do mesmo cargo+uf (chamada à parte, mais pesada que o perfil)
+export interface RankingCandidato {
   rank: number | null;
   totalGrupo: number;
 }
@@ -233,6 +237,7 @@ export const api = {
   partido: (id: number) => cacheado('partido:' + id, () => req<PartidoDetalhe>('/api/partidos/' + id)),
   partidosOpcoes: () => cacheado('partidos-opcoes', () => req<PartidoOpcao[]>('/api/partidos-opcoes')),
   candidato: (id: number) => req<ItemCandidatoDetalhe>('/api/candidatos/' + id),
+  candidatoRanking: (id: number) => req<RankingCandidato>('/api/candidatos/' + id + '/ranking'),
   researchVersoes: (tipo: 'candidato' | 'partido', entidadeId: number) =>
     req<Pesquisa[]>('/api/research' + querystring({ tipo, entidadeId })),
   contagens: () => req<{ candidatos: number; pesquisas: number; partidos: number }>('/api/contagens'),
