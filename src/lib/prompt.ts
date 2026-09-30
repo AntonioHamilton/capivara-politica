@@ -104,7 +104,11 @@ PARTIDO
 
 REGRAS
 ${regrasComuns}
-9. No quiz, responda o que o PARTIDO defende oficialmente (programa, estatuto, manifestos) e a orientação de voto da sua bancada no Congresso. Não use posições isoladas de um único filiado.
+9. No quiz, responda o que o PARTIDO defende como instituição. Da evidência mais forte para a mais fraca: (a) orientação de bancada e votos do partido em votações nominais da Câmara e do Senado sobre o tema (dados abertos da Câmara e do Senado); (b) programa, estatuto e manifestos oficiais (site do partido e registro no TSE); (c) declarações e projetos da direção nacional e do presidente nacional do partido; (d) projetos de lei apresentados de forma recorrente por parlamentares do partido. Não use posições isoladas de um único filiado nem de candidatos regionais.
+10. Quando o partido não tiver posição formal sobre o tema exato, é válido inferir pelo padrão de votos da bancada em temas parecidos, pelas alianças e coligações, por participar (ou não) do governo federal, ou pela linha da direção nacional que nunca foi contestada oficialmente — deixe claro na "explicacao" que é uma inferência (ex: "não há posição formal, mas a bancada votou majoritariamente a favor de X"). Se a bancada for dividida, siga a orientação oficial da liderança do partido; só use "sem_info" quando não houver nem evidência direta nem esse tipo de indício razoável.
+11. Antes de ir pergunta por pergunta, leia o estatuto e o programa do partido (site oficial e tse.jus.br) e procure as orientações de bancada nas votações mais relevantes dos últimos anos (previdência, reforma tributária, privatizações, arcabouço fiscal, pautas de costumes, segurança). Isso costuma responder várias perguntas de uma vez, já com fonte específica.
+12. Nas perguntas q25 e q26, a explicação deve dizer se o partido integra a base do governo Lula (ministérios, orientação de voto a favor do governo) ou a oposição, e qual é sua relação com a família Bolsonaro (apoio, coligação, federação, expulsão de filiados).
+13. "resumo" descreve o partido em até 3 frases neutras. "ideologia_declarada" é como o próprio partido se define no programa ou estatuto (ex: "social-democracia", "liberalismo"), não uma classificação sua; use null se ele não se definir. As "fontes" da raiz sustentam o resumo e a ideologia.
 
 PERGUNTAS DO QUIZ (responda "sim", "nao" ou "sem_info")
 ${listaPerguntas('candidato').replaceAll('O candidato', 'O partido')}
