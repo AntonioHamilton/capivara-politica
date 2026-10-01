@@ -18,51 +18,51 @@ import { Perfil } from './pages/Perfil.tsx';
 import { Quiz } from './pages/Quiz.tsx';
 import { RedefinirSenha } from './pages/RedefinirSenha.tsx';
 
-function TemaToggle() {
-  const [tema, setTema] = useState(document.documentElement.dataset.theme ?? 'escuro');
+function ThemeToggle() {
+  const [theme, setTheme] = useState(document.documentElement.dataset.theme ?? 'dark');
   const alternar = () => {
-    const proximo = tema === 'escuro' ? 'claro' : 'escuro';
+    const proximo = theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = proximo;
     try {
-      localStorage.setItem('tema', proximo);
+      localStorage.setItem('theme', proximo);
     } catch {
       // sem armazenamento disponível, o tema vale só nesta sessão
     }
-    setTema(proximo);
+    setTheme(proximo);
   };
   return (
-    <button className="btn-icone" onClick={alternar} aria-label={`Ativar modo ${tema === 'escuro' ? 'claro' : 'escuro'}`}>
-      <Icon name={tema === 'escuro' ? 'sun' : 'moon'} />
+    <button className="btn-icone" onClick={alternar} aria-label={`Ativar modo ${theme === 'dark' ? 'light' : 'dark'}`}>
+      <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
     </button>
   );
 }
 
 function UserMenu() {
   const { user, logout } = useAuth();
-  const [aberto, setAberto] = useState(false);
+  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!aberto) return;
+    if (!open) return;
     const fechar = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && setAberto(false);
+    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
     window.addEventListener('mousedown', fechar);
     window.addEventListener('keydown', onEsc);
     return () => {
       window.removeEventListener('mousedown', fechar);
       window.removeEventListener('keydown', onEsc);
     };
-  }, [aberto]);
+  }, [open]);
 
   return (
     <div className="user-menu" ref={ref}>
-      <button type="button" className="user-menu-btn" onClick={() => setAberto((v) => !v)} aria-haspopup="true" aria-expanded={aberto}>
+      <button type="button" className="user-menu-btn" onClick={() => setOpen((v) => !v)} aria-haspopup="true" aria-expanded={open}>
         <Avatar src={null} nome={user.username} size={32} />
         <span className="user-menu-nome">{user.username}</span>
       </button>
-      {aberto && (
+      {open && (
         <div className="user-menu-dropdown" role="menu">
           <div className="user-menu-cabecalho">
             <Avatar src={null} nome={user.username} size={36} />
@@ -76,17 +76,17 @@ function UserMenu() {
               )}
             </span>
           </div>
-          <NavLink to="/app/quiz" role="menuitem" onClick={() => setAberto(false)}>
+          <NavLink to="/app/quiz" role="menuitem" onClick={() => setOpen(false)}>
             Perfil
           </NavLink>
-          <NavLink to="/app/conta" role="menuitem" onClick={() => setAberto(false)}>
+          <NavLink to="/app/conta" role="menuitem" onClick={() => setOpen(false)}>
             Conta
           </NavLink>
           <button
             type="button"
             role="menuitem"
             onClick={() => {
-              setAberto(false);
+              setOpen(false);
               logout();
             }}
           >
@@ -98,16 +98,16 @@ function UserMenu() {
   );
 }
 
-function Topo({ menuAberto, setMenuAberto }: { menuAberto: boolean; setMenuAberto: (v: boolean) => void }) {
+function TopContent({ openMenu, setOpenMenu }: { openMenu: boolean; setOpenMenu: (v: boolean) => void }) {
   const { user } = useAuth();
   const { data } = useStore();
   return (
     <header className="topo">
       <div className="topo-int">
-        <NavLink to="/app" className="marca" onClick={() => setMenuAberto(false)}>
+        <NavLink to="/app" className="marca" onClick={() => setOpenMenu(false)}>
           <img className="marca-img" src="/capivara.png" alt="" /> Capivara Política
         </NavLink>
-        <nav className={menuAberto ? 'aberto' : ''} onClick={() => setMenuAberto(false)}>
+        <nav className={openMenu ? 'aberto' : ''} onClick={() => setOpenMenu(false)}>
           <NavLink to="/app" end>
             Candidatos
           </NavLink>
@@ -116,27 +116,27 @@ function Topo({ menuAberto, setMenuAberto }: { menuAberto: boolean; setMenuAbert
           {quizCompleto(data.quiz) && <NavLink to="/app/feedback">Feedback</NavLink>}
           {user.isAdmin && <NavLink to="/app/dados">Dados</NavLink>}
         </nav>
-        <TemaToggle />
+        <ThemeToggle />
         <UserMenu />
         <button
           className="btn-icone menu-btn"
-          onClick={() => setMenuAberto(!menuAberto)}
-          aria-label={menuAberto ? 'Fechar menu' : 'Abrir menu'}
-          aria-expanded={menuAberto}
+          onClick={() => setOpenMenu(!openMenu)}
+          aria-label={openMenu ? 'Fechar menu' : 'Abrir menu'}
+          aria-expanded={openMenu}
         >
-          <Icon name={menuAberto ? 'x' : 'menu'} />
+          <Icon name={openMenu ? 'x' : 'menu'} />
         </button>
       </div>
     </header>
   );
 }
 
-function Conteudo() {
-  const [menuAberto, setMenuAberto] = useState(false);
+function Content() {
+  const [openMenu, setOpenMenu] = useState(false);
   const { user } = useAuth();
   return (
     <>
-      <Topo menuAberto={menuAberto} setMenuAberto={setMenuAberto} />
+      <TopContent openMenu={openMenu} setOpenMenu={setOpenMenu} />
       <main>
         <Routes>
           <Route path="/" element={<Lista />} />
@@ -149,7 +149,7 @@ function Conteudo() {
           <Route path="/colinha" element={<Colinha />} />
           <Route
             path="/dados"
-            element={user.isAdmin ? <Dados /> : <p className="estado-tela">Apenas o administrador acessa esta página.</p>}
+            element={user.isAdmin ? <Dados /> : <p className="estado-tela">Apenas o administrador pode acessar esta página.</p>}
           />
           <Route path="*" element={<p className="estado-tela">Página não encontrada.</p>} />
         </Routes>
@@ -170,7 +170,7 @@ export function App() {
           path="/app/*"
           element={
             <AuthGate>
-              <Conteudo />
+              <Content />
             </AuthGate>
           }
         />
