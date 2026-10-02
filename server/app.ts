@@ -610,6 +610,20 @@ api.get('/candidatos/:id/ranking', async (req, res) => {
   res.json(posicao >= 0 ? { rank: posicao + 1, totalGrupo: classificaveis.length } : { rank: null, totalGrupo: 0 });
 });
 
+// repassa a foto de um candidato pro mesmo domínio: o navegador bloqueia (CORS) a leitura de fotos
+// externas ao gerar o PNG da colinha. Só aceita URLs que já estão cadastradas em candidates.foto.
+api.get('/foto', async (req, res) => {
+  const url = typeof req.query.url === 'string' ? req.query.url : '';
+  if (!/^https?:\/\//i.test(url) || !(await get('SELECT 1 FROM candidates WHERE foto = ?', [url]))) {
+    throw new HttpError(404, 'Foto não encontrada');
+  }
+  const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  const tipo = r.headers.get('content-type') ?? '';
+  if (!r.ok || !tipo.startsWith('image/')) throw new HttpError(502, 'Não consegui baixar a foto');
+  res.set({ 'Content-Type': tipo, 'Cache-Control': 'public, max-age=86400' });
+  res.send(Buffer.from(await r.arrayBuffer()));
+});
+
 // opções pro <select> da Colinha: leve (sem compat) e cacheável, já que não depende do usuário.
 api.get('/colinha-opcoes', async (req, res) => {
   const { cargo, uf } = req.query;

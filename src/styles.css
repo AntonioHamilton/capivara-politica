@@ -1905,6 +1905,74 @@ textarea:focus {
   font-size: 0.85rem;
 }
 
+.colinha-compacta {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--bg);
+  color: var(--text);
+  padding: 1.25rem;
+}
+
+.colinha-compacta-img {
+  width: 420px;
+}
+
+.colinha-compacta-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.4rem;
+}
+
+.colinha-compacta-titulo img {
+  height: 2rem;
+}
+
+.colinha-compacta-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.colinha-linha {
+  display: grid;
+  grid-template-columns: 5.5rem 4.5rem 44px 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.colinha-linha-cargo {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.colinha-linha-numero {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+
+.colinha-linha-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.colinha-linha-info span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .colinha-acoes {
   display: flex;
   gap: 0.75rem;

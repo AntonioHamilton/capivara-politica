@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { toPng } from 'html-to-image';
+import { ColinhaCompacta } from '../components/ColinhaCompacta.tsx';
 import { Avatar, Loading, PartyBadge } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
 import type { ColinhaItemPublico, ColinhaPublica, MelhoresColinha, OpcaoColinha, PartidoOpcao } from '../lib/api.ts';
@@ -54,6 +56,29 @@ function rotulo(opcao: OpcaoColinha): string {
   return opcao.numeroUrna ? `${opcao.nome} · ${opcao.numeroUrna}` : opcao.nome;
 }
 
+// o número vem da pesquisa em texto livre (pode ter ponto, traço ou espaço) — o campo só aceita dígitos
+function soDigitos(numero: string | null | undefined): string {
+  return (numero ?? '').replace(/\D/g, '');
+}
+
+// fotos externas costumam bloquear CORS e somem do PNG — baixa antes e embute como data URL
+async function fotoEmbutida(url: string | null): Promise<string | null> {
+  if (!url || url.startsWith('data:')) return url;
+  try {
+    const resp = await fetch(`/api/foto?url=${encodeURIComponent(url)}`);
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 function nomeCargo(grupo: Grupo): string {
   if (!grupo.slot) return CARGOS[grupo.cargo];
   return `${grupo.slot}º ${CARGOS[grupo.cargo]}`;
@@ -68,7 +93,7 @@ function estadoInicial(grupo: Grupo, melhores: MelhoresColinha | undefined): Esc
   return {
     candidatoId: melhor?.id ?? null,
     nomeManual: '',
-    numero: opcao?.numeroUrna ?? '',
+    numero: soDigitos(opcao?.numeroUrna),
   };
 }
 
@@ -144,21 +169,21 @@ function CartaoCargo({
     onMudar({
       candidatoId: Number(valor),
       nomeManual: '',
-      numero: escolhido?.numeroUrna ?? '',
+      numero: soDigitos(escolhido?.numeroUrna),
     });
   };
 
   const mudarNomeManual = (nomeManual: string) => {
     const achado = grupo.opcoes.find((o) => o.nome.trim().toLowerCase() === nomeManual.trim().toLowerCase());
     if (achado) {
-      onMudar({ candidatoId: achado.id, nomeManual: '', numero: achado.numeroUrna ?? '' });
+      onMudar({ candidatoId: achado.id, nomeManual: '', numero: soDigitos(achado.numeroUrna) });
       return;
     }
     onMudar({ ...escolha, candidatoId: null, nomeManual });
   };
 
   const mudarNumero = (numero: string) => {
-    const achado = grupo.opcoes.find((o) => o.numeroUrna === numero);
+    const achado = grupo.opcoes.find((o) => soDigitos(o.numeroUrna) === numero);
     if (achado) {
       onMudar({ candidatoId: achado.id, nomeManual: '', numero });
       return;
@@ -195,13 +220,19 @@ function CartaoCargo({
           type="text"
           value={escolha.candidatoId == null ? escolha.nomeManual : ''}
           onChange={(e) => mudarNomeManual(e.target.value)}
-          placeholder="Ou digite o nome de quem não está na lista"
+          placeholder="Procure o nome do seu candidato"
           aria-label={`Nome manual para ${nomeCargo(grupo)}`}
+          list={`sugestoes-${grupo.chave}`}
         />
+        <datalist id={`sugestoes-${grupo.chave}`}>
+          {grupo.opcoes.map((o) => (
+            <option key={o.id} value={o.nome} />
+          ))}
+        </datalist>
       </div>
 
       <div className="colinha-numero-campo">
-        <span className="colinha-numero-label">Número da urna</span>
+        <span className="colinha-numero-label">Número da urna{/^0+$/.test(escolha.numero) && ' — Nulo'}</span>
         <InputNumeroUrna digitos={digitos} valor={escolha.numero} onChange={mudarNumero} label={nomeCargo(grupo)} />
       </div>
 
@@ -260,7 +291,8 @@ export function Colinha() {
   const [salvando, setSalvando] = useState(false);
   const [compartilhando, setCompartilhando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
+  const refPng = useRef<HTMLDivElement>(null);
+  const [itensPng, setItensPng] = useState<ColinhaItemPublico[] | null>(null);
 
   const [partidos, setPartidos] = useState<PartidoOpcao[]>([]);
   const [partidosCarregados, setPartidosCarregados] = useState(false);
@@ -438,7 +470,7 @@ export function Colinha() {
       const chave = it.vaga ? `${it.cargo}:${it.uf}:${it.vaga}` : `${it.cargo}:${it.uf}`;
       const achado = opcoes.find((o) => o.cargo === it.cargo && o.uf === it.uf && o.nome === it.nome);
       novas[chave] = achado
-        ? { candidatoId: achado.id, nomeManual: '', numero: it.numero ?? '' }
+        ? { candidatoId: achado.id, nomeManual: '', numero: soDigitos(it.numero) }
         : { candidatoId: null, nomeManual: it.nome, numero: it.numero ?? '' };
     }
     setEscolhas(novas);
@@ -483,11 +515,13 @@ export function Colinha() {
   }
 
   const salvarImagem = async () => {
-    if (!ref.current) return;
     setSalvando(true);
     setMsg(null);
     try {
-      const url = await toPng(ref.current, {
+      const itens = await Promise.all(itensPublicos().map(async (it) => ({ ...it, foto: await fotoEmbutida(it.foto) })));
+      flushSync(() => setItensPng(itens));
+      if (!refPng.current) throw new Error('folha da imagem indisponível');
+      const url = await toPng(refPng.current, {
         backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg'),
         skipFonts: true,
         imagePlaceholder: PLACEHOLDER_FOTO,
@@ -553,10 +587,7 @@ export function Colinha() {
         </select>
       </div>
 
-      <div className="colinha-folha" ref={ref}>
-        <div className="colinha-marca">
-          <img className="marca-img" src="/capivara.png" alt="" /> Capivara Política
-        </div>
+      <div className="colinha-folha">
         {grupos.map((g) => {
           // enquanto troca de estado, os cargos que dependem dele ficam com dado do estado
           // anterior até a resposta nova chegar — melhor mostrar o loading do que o valor errado
@@ -576,6 +607,12 @@ export function Colinha() {
         })}
         {!racaCarregada && <Loading texto="Atualizando candidatos do estado..." variante="inline" />}
       </div>
+
+      {itensPng && (
+        <div style={{ position: 'fixed', left: -10000, top: 0 }} aria-hidden="true">
+          <ColinhaCompacta ref={refPng} itens={itensPng} formatoImagem />
+        </div>
+      )}
 
       {msg && <p className="aviso-msg">{msg}</p>}
       <div className="colinha-acoes">

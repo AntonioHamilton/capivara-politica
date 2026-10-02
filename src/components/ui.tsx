@@ -206,13 +206,21 @@ export function Tabs<T extends string>({
   );
 }
 
+function nomeFonte(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'fonte';
+  }
+}
+
 export function Fontes({ fontes }: { fontes: string[] | undefined }) {
   if (!fontes?.length) return null;
   return (
     <span className="fontes">
       {fontes.map((f, i) => (
         <a key={i} href={f} target="_blank" rel="noreferrer noopener">
-          fonte {fontes.length > 1 ? i + 1 : ''}
+          {nomeFonte(f)}
           <Icon name="external" size={12} />
         </a>
       ))}
